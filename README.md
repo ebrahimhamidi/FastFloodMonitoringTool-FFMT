@@ -1,5 +1,5 @@
 # FastFloodMonitoringTool-FFMT
-You can access the app using the following link:
+You can access the FFMT App using the following link:
 https://turnkey-aleph-386916.projects.earthengine.app/view/geefastfloodmonitoring
 
 This App provides intuitive web-based visualization tools to facilitate easy assessment of flood extents.
