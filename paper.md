@@ -73,7 +73,7 @@ Satellite-based flood inundation mapping is crucial for emergency responders, ai
 monitoring and managing floods. It enhances situational awareness, identifying areas requiring immediate 
 action across large geographical areas, expediting relief response activities.
 Remote sensing is widely employed not only for flood inundation mapping but also for assessing flood impact, 
-offering a comprehensive review to address diverse stakeholder needs [2]. These stakeholders have specific 
+offering a comprehensive review to address diverse stakeholder needs [@Sadiq:2023]. These stakeholders have specific 
 requirements aligned with particular objectives, serving various purposes.
 • Flood monitoring
 • Strategies for preventing and mitigating flood risks
@@ -96,6 +96,7 @@ considering the populations, infrastructure facilities, urban area, and cropland
 # Citations
 
 - `@author:2016`  ->  "OECD (2016)"
+- `[@Sadiq:2023]` -> "(Sadiq et al., 2023)"
 - `[@Hamidi:2023]` -> "(Hamidi et al., 2023)"
 
 # Acknowledgements
@@ -105,5 +106,6 @@ funded by the National Science Foundation INFEWS Program and the U.S. Army Corps
 support for development of this App is awarded through CUAHSI’s 2023 Hydroinformatics Innovation Fellowship (HIF).
 
 # References
-OECD, Financial Management of Flood Risk. OECD, 2016. doi: 10.1787/9789264257689-en.
-E. Hamidi, B. G. Peter, D. F. Munoz, H. Moftakhari, and H. Moradkhani, “Fast Flood Extent Monitoring with SAR Change Detection Using Google Earth Engine,” IEEE Trans. Geosci. Remote Sensing, pp. 1–1, 2023, doi: 10.1109/TGRS.2023.3240097.
+- OECD, Financial Management of Flood Risk. OECD, 2016. doi: 10.1787/9789264257689-en.
+- R. Sadiq, M. Imran, and F. Ofli, “Remote Sensing for Flood Mapping and Monitoring,” in International Handbook of Disaster Research, A. Singh, Ed., Singapore: Springer Nature Singapore, 2023, pp. 679–697. doi: 10.1007/978-981-19-8388-7_178.
+- E. Hamidi, B. G. Peter, D. F. Munoz, H. Moftakhari, and H. Moradkhani, “Fast Flood Extent Monitoring with SAR Change Detection Using Google Earth Engine,” IEEE Trans. Geosci. Remote Sensing, pp. 1–1, 2023, doi: 10.1109/TGRS.2023.3240097.
