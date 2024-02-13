@@ -1,0 +1,2137 @@
+///// ********************************************************************************************************************* /////
+///// App Name: Multi-Source and Multi-Temporal Google Earth Engine App for Emergency Flood Mapping                         /////
+/////                                                                                                                       /////
+///// This App created by Ebrahim Hamidi, Ph.D candidate at the University of Alabama and reviewed by                       /////
+///// Brad G. Peter, Assistant Professor, Department of Geosciences, University of Arkansas.                                /////
+/////                                                                                                                       /////
+///// This GEE App partioally funded by CUAHSI Hydroinformatics Innovation Fellowship (HIF) program in 2023.                /////
+/////                                                                                                                       /////
+/////                                                                                                                       /////
+///// This project aims to monitor global scale flood extents by developing a user-friendly Google Earth Engine (GEE) App.  /////
+///// The product of this study will help emergency responders as well as the scientific community with rapid and reliable  /////
+///// flood inundation information and improves the current methods of flood mapping.                                       /////
+///// ********************************************************************************************************************* /////
+
+/// *** Drawing tool preparation *** ///
+var drawingTools = Map.drawingTools();
+drawingTools.setShown(false);
+
+while (drawingTools.layers().length() > 0) {
+  var layer = drawingTools.layers().get(0);
+  drawingTools.layers().remove(layer);
+}
+
+var dummyGeometry =
+    ui.Map.GeometryLayer({geometries: null, name: 'geometry', color: '23cba7'});
+drawingTools.layers().add(dummyGeometry);
+
+function clearGeometry() {
+  var layers = drawingTools.layers();
+  layers.get(0).geometries().remove(layers.get(0).geometries().get(0));
+}
+
+function drawRectangle() {
+  clearGeometry();
+  drawingTools.setShape('rectangle');
+  drawingTools.draw();
+}
+
+function drawPolygon() {
+  clearGeometry();
+  drawingTools.setShape('polygon');
+  drawingTools.draw();
+}
+
+/// *** Get the geometry from the drawn tools *** ///
+var aoi = drawingTools.layers().get(0).getEeObject();
+clearGeometry();
+
+/// *** Map floods based on the user defined threshold value *** ///
+function sarFloodMapper(aoi) {
+  Map.clear()
+
+  // Set the drawing mode back to null; turns drawing off.
+  drawingTools.setShape(null);
+
+/// *** Get the date and indices thrshold information from user panel interface *** ///
+  var startDay = app.startDateRange.startBoxDay.getValue()
+  var startMonth = app.startDateRange.startBoxMonth.getValue()
+  var startYear = app.startDateRange.startBoxYear.getValue()
+  
+  var endDay = app.endDateRange.endBoxDay.getValue()
+  var endMonth = app.endDateRange.endBoxMonth.getValue()
+  var endYear = app.endDateRange.endBoxYear.getValue()
+  
+  var lcluSelected = app.lcluSelect.lclu_info.getValue();
+  
+  /// *** Check days and months information *** ///
+  var missDate_error = ui.Panel({
+    widgets: [
+      ui.Label({value: 'Error: Unfiled date period!', style: {fontWeight: '500', fontSize: '24px', color:'crimson' , margin: '3px 3px 3px 3px'}}),
+    ],
+    style: {
+    position: 'top-center',
+    width: '315px',
+    backgroundColor: 'white',
+    border: '3px solid gray'
+    }
+  })
+  
+  var missDateError = "off"
+  if (startDay == undefined || startMonth == undefined || startYear == undefined || endDay == undefined || endMonth == undefined || endYear == undefined || startDay == "" || startMonth == "" || startYear == "" || endDay == "" ||endMonth == "" || endYear == "") {
+      var text_error_1 = ui.Label('The flood event period input date is missing. Please fill all the date boxes to ensure accurate data."', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+      missDate_error.add(ui.Panel([text_error_1]))
+      var text_error_2 = ui.Label('For example, for the Hurricane Harvey flood event in Galveston Bay, the period could be defined:', {fontSize: '14px', color:'1928E1', margin: '1px 3px 3px 10px'});
+      var text_error_3 = ui.Label('From: "25-08-2017"', {fontSize: '14px', color:'7F8087', margin: '1px 3px 3px 10px'});
+      var text_error_4 = ui.Label('To: "10-09-2017"', {fontSize: '14px', color:'7F8087', margin: '1px 3px 3px 10px'});
+      missDate_error.add(ui.Panel([text_error_2, text_error_3, text_error_4]))
+      missDateError = "on"
+  }
+  if (missDateError == "on"){
+    Map.add(missDate_error)
+  }
+  
+  var dateStart = ee.Number.parse(startDay).getInfo()
+  var monthStart = ee.Number.parse(startMonth).getInfo()
+  var yearStart = ee.Number.parse(startYear).getInfo()
+  
+  var dateEnd = ee.Number.parse(endDay).getInfo()
+  var monthEnd = ee.Number.parse(endMonth).getInfo()
+  var yearEnd = ee.Number.parse(endYear).getInfo()
+  
+  var RefDateStart = 01
+  var RefStartDay = app.refStartDateRange.refStartBoxDay.getValue()
+  if (RefStartDay != undefined) {
+    if (RefStartDay != "") {
+      RefDateStart = ee.Number.parse(RefStartDay).getInfo()
+    }
+  }
+  
+  var RefMonthStart = 06
+  var RefStartMonth = app.refStartDateRange.refStartBoxMonth.getValue()
+  if (RefStartMonth != undefined) {
+    if (RefStartMonth != "") {
+      RefMonthStart = ee.Number.parse(RefStartMonth).getInfo()
+    }
+  }
+  
+  var RefYearStart = 2017
+  var RefStartYear = app.refStartDateRange.refStartBoxYear.getValue()
+  if (RefStartYear != undefined) {
+    if (RefStartYear != "") {
+      RefYearStart = ee.Number.parse(RefStartYear).getInfo()
+    }
+  }
+  
+  var RefDateEnd = 15
+  var RefEndDay = app.refEndDateRange.refEndBoxDay.getValue()
+  if (RefEndDay != undefined) {
+    if (RefEndDay != "") {
+      RefDateEnd = ee.Number.parse(RefEndDay).getInfo()
+    }
+  }
+  
+  var RefMonthEnd = 06
+  var RefEndMonth = app.refEndDateRange.refEndBoxMonth.getValue()
+  if (RefEndMonth != undefined) {
+    if (RefEndMonth != "") {
+      RefMonthEnd = ee.Number.parse(RefEndMonth).getInfo()
+    }
+  }
+  
+  var RefYearEnd = 2017
+  var RefEndYear = app.refEndDateRange.refEndBoxYear.getValue()
+  if (RefEndYear != undefined) {
+    if (RefEndYear != "") {
+      RefYearEnd = ee.Number.parse(RefEndYear).getInfo()
+    }
+  }
+  
+  var userDefinedNDFIThre = 1.5
+  var userThreNDFI = app.threValue.threBoxNDFI.getValue()
+  if (userThreNDFI != undefined) {
+    if (userThreNDFI != "") {
+      userDefinedNDFIThre = ee.Number.parse(userThreNDFI).getInfo()
+    }
+  }
+
+  var userDefinedDIIThre = 1.5
+  var userThreDII = app.threValue.threBoxDII.getValue()
+  if (userThreDII != undefined) {
+    if (userThreDII != "") {
+      userDefinedDIIThre = ee.Number.parse(userThreDII).getInfo()
+    }
+  }
+
+  var userDefinedMNDWIThre = 0.4
+  var userThreMNDWI = app.threValue.threBoxMNDWI.getValue()
+  if (userThreMNDWI != undefined) {
+    if (userThreMNDWI != "") {
+      userDefinedMNDWIThre = ee.Number.parse(userThreMNDWI).getInfo()
+    }
+  }
+
+  /// *** Date set up from the the user panel interface information *** ///
+  var start = yearStart + '-'+ monthStart + '-'+ dateStart
+  var end = yearEnd + '-' + monthEnd + '-'+ dateEnd
+
+  var errors = ui.Panel({
+    widgets: [
+     ui.Label({value: 'Error: Incorrect Input Date!', style: {fontWeight: '500', fontSize: '24px', color:'crimson' , margin: '3px 3px 3px 3px'}}),
+    ],
+    style: {
+    position: 'top-center',
+    width: '315px',
+    backgroundColor: 'white',
+    border: '3px solid gray'
+  
+    }
+  })
+  
+  var dateError = "off"
+  var currentyear = ee.Number.parse(ee.Date(Date.now()).get('year'))
+  currentyear = ee.Number.parse(ee.String(currentyear))
+  if (yearStart < 2014 || yearStart > currentyear || yearStart == "") {
+    var text_error_1 = ui.Label('* Start year value error.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+    errors.add(ui.Panel([text_error_1]))
+    dateError = "on"
+  }
+  
+  if (yearEnd < 2014 || yearEnd > currentyear) {
+    var text_error_1 = ui.Label('* End year value error.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+    errors.add(ui.Panel([text_error_1]))
+    dateError = "on"
+  }
+  
+  if (monthStart < 1 || monthStart > 12) {
+    var text_error_1 = ui.Label('* Start month value error.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+    errors.add(ui.Panel([text_error_1]))
+    dateError = "on"
+  }
+  
+  if (monthEnd < 1 || monthEnd > 12) {
+    var text_error_1 = ui.Label('* End month value error.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+    errors.add(ui.Panel([text_error_1]))
+    dateError = "on"
+  }
+
+  if (dateStart < 1 || dateStart > 31) {
+    var text_error_1 = ui.Label('* Start day value error.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+    errors.add(ui.Panel([text_error_1]))
+    dateError = "on"
+  }
+  else {
+    if (monthStart == 2) {
+      if (dateStart > 28) {
+        var text_error_1 = ui.Label('* Start day value error. The input month has 28 days.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+        errors.add(ui.Panel([text_error_1]))
+        dateError = "on"
+      }
+    }
+    if (monthStart == 4 || monthStart == 6 || monthStart == 9 || monthStart == 11) {
+      if (dateStart > 30) {
+        var text_error_1 = ui.Label('* Start day value error. The input month has 30 days.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+        errors.add(ui.Panel([text_error_1]))
+        dateError = "on"
+      }
+    }
+  }
+  
+  
+  if (dateEnd < 1 || dateEnd > 31) {
+    var text_error_1 = ui.Label('* End day value error.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+    errors.add(ui.Panel([text_error_1]))
+    dateError = "on"
+  }
+  else {
+    if (monthEnd == 2) {
+      if (dateEnd > 28) {
+        var text_error_1 = ui.Label('* End day value error. The input month has 28 days.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+        errors.add(ui.Panel([text_error_1]))
+        dateError = "on"
+      }
+    }
+    if (monthEnd == 4 || monthEnd == 6 || monthEnd == 9 || monthEnd == 11) {
+      if (dateEnd > 30) {
+        var text_error_1 = ui.Label('* End day value error. The input month has 30 days.', {fontSize: '16px', color:'1928E1', margin: '1px 3px 3px 10px'});
+        errors.add(ui.Panel([text_error_1]))
+        dateError = "on"
+      }
+    }
+  }
+  
+  if (dateError == "on"){
+    Map.add(errors)
+  }
+
+  /// *** Referenced Date set up from the the user panel interface information *** ///
+  var refStart = RefYearStart + '-'+ RefMonthStart + '-'+ RefDateStart
+  var refEnd = RefYearEnd + '-' + RefMonthEnd + '-'+ RefDateEnd
+  
+  /// *** Define area of interest *** ///
+  var bounds = aoi//ee.Geometry
+  drawingTools.setShown(false);
+  clearGeometry();
+
+  /// *** Set the date and indices thrshold information from user panel interface *** ///
+  //           [before_start, before_end, after_start, after_end, user_defined_SAR_indices_thre, mndwi_threshold]
+  // var params = ['2017-06-01', '2017-06-15', start, end, userDefinedNDFIThre, userDefinedDIIThre, userDefinedMNDWIThre]
+  var params = [refStart, refEnd, start, end, userDefinedNDFIThre, userDefinedDIIThre, userDefinedMNDWIThre]
+
+  // SAR Input Data 
+  var before_start = params[0]
+  var before_end = params[1]
+  var after_start = params[2]
+  var after_end = params[3]
+  var polarization = "VH"
+  var pass_direction = "ASCENDING"
+
+  // User defined k threshols values 
+  var k_ndfi = params[4]
+  var k_dii = params[5]
+
+  // MNDWI flooded pixels Threshold Criteria
+  var mndwi_threshold = params[6]
+
+  // Datasets -----------------------------------
+  var dem = ee.Image("NASA/NASADEM_HGT/001").select('elevation')
+  var slope = ee.Terrain.slope(dem)
+  var swater = ee.Image('JRC/GSW1_0/GlobalSurfaceWater').select('seasonality')
+  var water_mask = swater
+  var collection = ee.ImageCollection('COPERNICUS/S1_GRD')
+    .filter(ee.Filter.eq('instrumentMode', 'IW'))
+    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', polarization))
+    .filter(ee.Filter.eq('orbitProperties_pass', pass_direction)) 
+    .filter(ee.Filter.eq('resolution_meters', 10))
+    .filterBounds(bounds)
+    .select(polarization)
+
+  var before = collection.filterDate(before_start, before_end)
+  var after = collection.filterDate(after_start, after_end)
+  print("Sentinel-1 GRD Before", before)
+  print("Sentinel-1 GRD After", after)
+
+  // Generating Reference and Flood Multi-temporal SAR Data ------------------------
+  var mean_before = before.mean().clip(bounds)
+  var min_after = after.min().clip(bounds)
+  
+  // Caculate NDFI ------------------------
+  var mean_before_abs = mean_before.abs()
+  var min_after_abs = min_after.abs()
+  var ndfi = mean_before_abs.subtract(min_after_abs).divide(mean_before_abs.add(min_after_abs)).rename('NDFI')
+  var ndfi_filtered = ndfi.focal_mean({radius: 50, kernelType: 'circle', units: 'meters'})
+  
+  // NDFI Normalization -----------------------
+  var ndfi_min = ndfi_filtered.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+
+  var ndfi_max = ndfi_filtered.reduceRegion({
+    reducer: ee.Reducer.max(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+
+  var ndfi_rang = ee.Number(ndfi_max.get('NDFI')).subtract(ee.Number(ndfi_min.get('NDFI')))
+  var ndfi_subtctMin = ndfi_filtered.subtract(ee.Number(ndfi_min.get('NDFI')))
+  var ndfi_norm = ndfi_subtctMin.divide(ndfi_rang)
+
+  // NDFI Thresholding ------------------------
+  var ndfi_mean = ndfi_norm.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+  
+  var ndfi_std = ndfi_norm.reduceRegion({
+    reducer: ee.Reducer.stdDev(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+  
+  var ndfi_th = ee.Number(ndfi_mean.get('NDFI')).subtract(ee.Number(k_ndfi).multiply(ee.Number(ndfi_std.get('NDFI'))))
+  print('NDFI Threshold', ndfi_th)
+
+  // Apply Thresholding Value on NDFI
+  ndfi_filtered = ndfi_norm.lt(ndfi_th)
+
+  // NDFI Masking -------------------------------------
+  var swater_mask = swater.gte(4)
+  swater_mask = swater.mask().where(swater_mask.eq(0),0)
+  var slope_mask = slope.lt(5)
+  var swater_clip = swater_mask.updateMask(swater_mask.eq(1)).clip(bounds)
+  
+  var ndfi_flooded_masked = ndfi_filtered
+    .updateMask(ndfi_filtered.eq(1))
+    .updateMask(swater_mask.eq(0))
+    .updateMask(slope_mask.eq(1))
+  var connections = ndfi_flooded_masked.connectedPixelCount().gte(25)
+  var ndfi_flood = ndfi_flooded_masked.updateMask(connections.eq(1))
+
+
+  //------------------------------------------------------------------------
+  // Caculate NDFI ------------------------
+  var dii_image = min_after.abs().subtract(mean_before.abs())
+  var dii_image_filtered = dii_image.focal_mean({radius: 50, kernelType: 'circle', units: 'meters'})
+
+  // DII Normalization
+  var dii_image_min = dii_image_filtered.reduceRegion({
+    reducer: ee.Reducer.min(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+
+  var dii_image_max = dii_image_filtered.reduceRegion({
+    reducer: ee.Reducer.max(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+  
+  var dii_image_rang = ee.Number(dii_image_max.get('VH')).subtract(ee.Number(dii_image_min.get('VH')))
+  var dii_image_subtctMin = dii_image_filtered.subtract(ee.Number(dii_image_min.get('VH')))
+  var dii_image_norm = dii_image_subtctMin.divide(dii_image_rang)
+  
+  if (app.checkbox_2.imagehistogram.getValue() === true) {
+
+    // Histogram chart properties
+    var histogramPanel = ui.Panel({
+    style:
+        {height: '235px', width: '350px', position: 'bottom-right', shown: false}
+    })
+    Map.add(histogramPanel);
+    
+    if (!histogramPanel.style().get('shown')) {
+      histogramPanel.style().set('shown', true);
+    }
+    
+    // Desplay histograms
+    var histogram
+        = ui.Chart.image.histogram({ image: ndfi_norm.addBands(dii_image_norm), region: bounds, scale: 10, maxPixels: 1e13})
+            .setSeriesNames(['NDFI', 'DII'])
+            .setOptions({
+              title: 'SAR Indices Histogram',
+              hAxis: {
+                title: 'SAR Pixel Value',
+                titleTextStyle: {italic: false, bold: true},
+              },
+              vAxis:
+                  {title: 'Frequency', titleTextStyle: {italic: false, bold: true}},
+              colors: ['e8b807', '24d6e8']
+            });
+    histogramPanel.widgets().reset([histogram])
+  }
+  
+  // DII Thresholding ------------------------
+  var dii_image_mean = dii_image_norm.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+  
+  var dii_image_std = dii_image_norm.reduceRegion({
+    reducer: ee.Reducer.stdDev(),
+    geometry: bounds,
+    scale: 10,
+    maxPixels: 1e13
+  })
+  
+  var dii_image_th = ee.Number(dii_image_mean.get('VH')).add(ee.Number(k_dii).multiply(ee.Number(dii_image_std.get('VH'))))
+  print('dii_image_th = ', dii_image_th)
+
+  // Apply Thresholding on DII
+  dii_image_filtered = dii_image_norm.gt(dii_image_th)
+
+  // DII Masking -------------------------------------
+  var dii_image_masked = dii_image_filtered
+    .updateMask(dii_image_filtered.eq(1))
+    .updateMask(swater_mask.eq(0))
+    .updateMask(slope_mask.eq(1))
+  var dii_image_connections = dii_image_masked.connectedPixelCount().gte(25)
+  dii_image_masked = dii_image_masked.updateMask(dii_image_connections.eq(1))
+  var dii_image_flood = dii_image_masked.updateMask(dii_image_masked.eq(1))
+
+  /// *** Validation Using Sentinel-2 Surface Reflectance Imagery Data *** ///
+  var sentinel2_before = ee.ImageCollection("COPERNICUS/S2").filterBounds(bounds).filterDate(before_start, before_end)
+  var sentinel2_after = ee.ImageCollection("COPERNICUS/S2").filterBounds(bounds).filterDate(after_start, after_end)
+  var sentinel2_before_mosaic = sentinel2_before.mosaic().clip(bounds)
+  var sentinel2_after_mosaic = sentinel2_after.mosaic().clip(bounds)
+
+  print("Sentinel-2 Before", sentinel2_before)
+  print("Sentinel-2 After", sentinel2_after)
+
+  // Cloud Cover Masks
+  var qa = sentinel2_after_mosaic.select('QA60')
+  var radix = 2 
+  var opaqueBit = 10
+  var cirrusBit = 11 
+  var clouds_1 = qa.bitwiseAnd(Math.pow(radix,opaqueBit)).neq(0).rename('opaque')
+  var clouds_2 = qa.bitwiseAnd(Math.pow(radix,cirrusBit)).neq(0).rename('cirrus')
+  var all_clouds = clouds_1.add(clouds_2).gt(0)
+  
+  var cloudsMasked = sentinel2_after_mosaic.updateMask(all_clouds.eq(0))
+  
+  // Calculating MNDWI from optical imagery
+  var green = cloudsMasked.select('B3')
+  var swir1 = cloudsMasked.select('B11')
+  
+  var mndwi = green.subtract(swir1).divide(green.add(swir1)).rename('MNDWI')
+  print(mndwi,"mndwimndwi")
+  var mndwi_filtered = mndwi.gt(mndwi_threshold)
+  var mndwi_masking = mndwi_filtered
+    .updateMask(swater_mask.eq(0))
+    .updateMask(mndwi_filtered.eq(1))
+
+  var mndwi_connections = mndwi_masking.connectedPixelCount().gte(25)
+  var mndwi_flood = mndwi_filtered.updateMask(mndwi_connections.eq(1))
+  print(mndwi,"mndwi_floodmndwi_flood")
+  
+  // Combined NDFI and DII flood extents -----------------------------------
+  var combined_ndfi_dii = ndfi_flood.mask().add(dii_image_flood.mask()).gt(0)
+  var combined_ndfi_dii = combined_ndfi_dii.updateMask(combined_ndfi_dii.eq(1))
+  
+  // Combined NDFI, DII and MNDWI (optical) flood extents -----------------------------------
+  var combined_ndfi_dii_MNDWI = combined_ndfi_dii.mask().add(mndwi_flood.mask()).gt(0)
+  var combined_ndfi_dii_MNDWI = combined_ndfi_dii_MNDWI.updateMask(combined_ndfi_dii_MNDWI.eq(1))
+
+  // Display the maps --------------------------------------------------------------------------------
+  Map.addLayer(mean_before, {min: -29, max: -9, palette: []}, "SAR Image Before Flood (Mean)", 0)
+  Map.addLayer(min_after, {min: -29, max: -12, palette: []}, "SAR Image After Flood (Min)", 1)
+  
+  if (app.checkbox_7.displayNDFIandDIIimage.getValue() === true) {
+    Map.addLayer(ndfi_norm, {min: 0, max: 1, palette: []}, "NDFI Image", 0)
+    Map.addLayer(dii_image_norm, {min: 0, max: 1, palette: []}, "DII Image", 0)
+  }
+  
+  if (app.checkbox_1.calibration.getValue() === true) {
+    Map.addLayer(sentinel2_after_mosaic, {bands:['B4','B3','B2'], min: 350, max: 1500}, 'Optical Image After Flood',0)
+    Map.addLayer(mndwi_flood, {palette: 'e4156b'}, "Optical MNDWI Flood", 0)
+  }
+  
+  Map.addLayer(swater_clip, {palette: ['#f6adff']}, "Open Waters", 0)
+    
+  if (app.checkbox_3.displayNDFIandDIIflood.getValue() === true) {
+    Map.addLayer(ndfi_flood, {palette: 'fbc708'}, 'NDFI Flood',0)
+    Map.addLayer(dii_image_flood, {palette: '24d6e8'}, 'DII Flood',0)
+  }
+  Map.addLayer(combined_ndfi_dii, {palette: '56ff6b'}, "Combined NDFI & DII Flood", 1)
+
+  Map.setOptions('HYBRID')
+  Map.centerObject(bounds)
+  
+   // function downloadImg() {
+  if (app.checkbox_4.getDownloadLink.getValue() === true) {
+    var viewBounds = bounds;
+    var downloadArgs = {
+      name: 'combined_ndfi_dii',
+      crs: 'EPSG:5070',
+      scale: 30,
+      region: viewBounds.toGeoJSONString()
+    };
+    var url = combined_ndfi_dii.getDownloadURL(downloadArgs);
+     
+    var textstyle = {
+      'fontSize':'12px',
+      'fontWeight':'bold'
+    };
+    
+    var urlDownloadLabel = ui.Label('Click to Download Merged NDFI&DII Flood Map', textstyle);
+    urlDownloadLabel.setUrl(url);
+    urlDownloadLabel.style().set({shown: true});
+    
+    panelDownload.add(ui.Panel([
+      urlDownloadLabel
+      ]))
+    Map.add(panelDownload)
+  }
+  /// *** Extract information from the calculated flood extent maps *** ///
+  // Calculate area of flood extent
+  var flood_pixel_area = combined_ndfi_dii.multiply(ee.Image.pixelArea());
+  var flooded_area_sqm = flood_pixel_area.reduceRegion({
+    reducer: ee.Reducer.sum(),              
+    geometry: aoi,
+    scale: 10, 
+    bestEffort: true
+    });
+  
+  // Convert flooded extent from m^2 to km^2
+  var flooded_area_sqkm = flooded_area_sqm
+    .getNumber("NDFI")
+    .divide(10000)
+    .round()
+    .divide(100);
+  
+  /// *** Calculate affected Land cover and land use using using "NLCD 2019: USGS National Land Cover Database" ***///
+  if (lcluSelected == "USA") {
+    var dataset = ee.ImageCollection('USGS/NLCD_RELEASES/2019_REL/NLCD');
+    var nlcd2016 = dataset.filter(ee.Filter.eq('system:index', '2016')).first();
+    var LCLU = nlcd2016.select('landcover').clip(aoi);
+
+    // Flooded cultivated lands
+    var cultivated_mask = LCLU.eq(82).or(LCLU.eq(81))
+    var cultivated = LCLU.updateMask(cultivated_mask)
+    
+    var lclu_data = 'the National Land Cover Database (NLCD) 30-m product land cover database for USA'
+  } 
+  if (lcluSelected == "Globe") {
+    var dataset = ee.ImageCollection("ESA/WorldCover/v200")
+    var worldCover = dataset.first();
+    var LCLU = worldCover.clip(aoi);
+
+    // Flooded cultivated lands
+    var cultivated_mask = LCLU.eq(40)
+    var cultivated = LCLU.updateMask(cultivated_mask)
+
+    var lclu_data = 'the European Space Agency (ESA) WorldCover 10m product global land cover map'
+  }
+  
+  // Calculate affected cropland using the resampled flood layer
+  var cultivated_flooded = combined_ndfi_dii.updateMask(cultivated)
+
+  // get pixel area of affected cropland layer
+  var cultivated_pixelarea = cultivated_flooded.multiply(ee.Image.pixelArea());
+
+  // sum pixels of affected cropland layer
+  var cultivated_area = cultivated_pixelarea.reduceRegion({
+    reducer: ee.Reducer.sum(), //sum all pixels with area information                
+    geometry: aoi,
+    scale: 30,
+    maxPixels: 1e9
+    });
+  
+  // convert area to square km
+  var crop_area_sqkm = cultivated_area
+    .getNumber("NDFI")
+    .divide(10000)
+    .round()
+    .divide(100);
+
+  // Flooded Urban lands
+  if (lcluSelected == "USA") {
+    var urban_mask = LCLU.eq(21).or(LCLU.eq(22)).or(LCLU.eq(23)).or(LCLU.eq(24))
+  } if (lcluSelected == "Globe") {
+    var urban_mask = LCLU.eq(50)
+  }
+  var urban = LCLU.updateMask(urban_mask)
+
+  // Calculate affected cropland using the resampled flood layer
+  var urban_flooded = combined_ndfi_dii.updateMask(urban)
+
+  // get pixel area of affected cropland layer
+  var urban_pixelarea = urban_flooded.multiply(ee.Image.pixelArea());
+
+  // sum pixels of affected cropland layer
+  var urban_area = urban_pixelarea.reduceRegion({
+    reducer: ee.Reducer.sum(), //sum all pixels with area information                
+    geometry: aoi,
+    scale: 30,
+    maxPixels: 1e9
+    });
+  
+  // convert area to square km
+  var urban_area_sqkm = urban_area
+    .getNumber("NDFI")
+    .divide(1000)
+    .round()
+    .divide(1000);
+
+  // Exposed people
+  // Load JRC Global Human Settlement Popluation Density layer, Resolution: 250, "Number of people per cell is given".
+  var dataset = ee.ImageCollection('WorldPop/GP/100m/pop').filterDate('2017');
+  var count_population = dataset.select('population').mosaic().clip(aoi);
+  
+  // Create a raster showing exposed population only using the resampled flood layer
+  var people_affected = count_population
+    .updateMask(combined_ndfi_dii)
+    .updateMask(count_population);
+  print("people_affected", people_affected)
+
+  //Sum pixel values of exposed population raster 
+  var people_affected_count = people_affected.reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: aoi,
+    scale: 100,
+    maxPixels:1e9 
+  });
+  
+  // get number of exposed people as integer
+  var people_affected_number = people_affected_count.getNumber('population').round();
+  print("people_affected_number2", people_affected_number)
+
+  // ***** Flooded Heavy Industry ***** //
+  var LCZones_dataset = ee.ImageCollection("RUB/RUBCLIM/LCZ/global_lcz_map/latest")
+  var LCZones = LCZones_dataset.select("LCZ_Filter").first().clip(aoi);
+
+  var Industry_mask = LCZones.eq(10)
+  var Industry = LCZones.updateMask(Industry_mask)
+
+  // Calculate affected cropland using the resampled flood layer
+  var Industry_flooded = combined_ndfi_dii.updateMask(Industry)
+
+  // get pixel area of affected cropland layer
+  var Industry_pixelarea = Industry_flooded.multiply(ee.Image.pixelArea());
+
+  // sum pixels of affected cropland layer
+  var Industry_area = Industry_pixelarea.reduceRegion({
+    reducer: ee.Reducer.sum(), //sum all pixels with area information                
+    geometry: aoi,
+    scale: 100,
+    maxPixels: 1e9
+    });
+  
+  // convert area to square km
+  var Industry_area_sqkm = Industry_area
+    .getNumber("NDFI")
+    .divide(10000)
+    .round()
+    .divide(100);
+
+  // ***** Dense Building affected ***** //
+  var DenseBuild_mask = LCZones.eq(1).or(LCZones.eq(2)).or(LCZones.eq(3)).or(LCZones.eq(7))
+  var DenseBuild = LCZones.updateMask(DenseBuild_mask)
+
+  // Calculate affected cropland using the resampled flood layer
+  var DenseBuild_flooded = combined_ndfi_dii.updateMask(DenseBuild)
+
+  // get pixel area of affected cropland layer
+  var DenseBuild_pixelarea = DenseBuild_flooded.multiply(ee.Image.pixelArea());
+
+  // sum pixels of affected cropland layer
+  var DenseBuild_area = DenseBuild_pixelarea.reduceRegion({
+    reducer: ee.Reducer.sum(), //sum all pixels with area information                
+    geometry: aoi,
+    scale: 100,
+    maxPixels: 1e9
+    });
+  
+  // convert area to square km
+  var DenseBuild_area_sqkm = DenseBuild_area
+    .getNumber("NDFI")
+    .divide(10000)
+    .round()
+    .divide(100);
+
+  // ***** Open Arrangement Building affected ***** //
+  var OpArrBuild_mask = LCZones.eq(4).or(LCZones.eq(5)).or(LCZones.eq(6))
+  var OpArrBuild = LCZones.updateMask(OpArrBuild_mask)
+
+  // Calculate affected cropland using the resampled flood layer
+  var OpArrBuild_flooded = combined_ndfi_dii.updateMask(OpArrBuild)
+
+  // get pixel area of affected cropland layer
+  var OpArrBuild_pixelarea = OpArrBuild_flooded.multiply(ee.Image.pixelArea());
+
+  // sum pixels of affected cropland layer
+  var OpArrBuild_area = OpArrBuild_pixelarea.reduceRegion({
+    reducer: ee.Reducer.sum(), //sum all pixels with area information                
+    geometry: aoi,
+    scale: 100,
+    maxPixels: 1e9
+    });
+  
+  // convert area to square km
+  var OpArrBuild_area_sqkm = OpArrBuild_area
+    .getNumber("NDFI")
+    .divide(10000)
+    .round()
+    .divide(100);
+
+  // ***** Sparse Arrangement Building affected ***** //
+  var SpArrBuild_mask = LCZones.eq(9)
+  var SpArrBuild = LCZones.updateMask(SpArrBuild_mask)
+
+  // Calculate affected cropland using the resampled flood layer
+  var SpArrBuild_flooded = combined_ndfi_dii.updateMask(SpArrBuild)
+
+  // get pixel area of affected cropland layer
+  var SpArrBuild_pixelarea = SpArrBuild_flooded.multiply(ee.Image.pixelArea());
+
+  // sum pixels of affected cropland layer
+  var SpArrBuild_area = SpArrBuild_pixelarea.reduceRegion({
+    reducer: ee.Reducer.sum(), //sum all pixels with area information                
+    geometry: aoi,
+    scale: 100,
+    maxPixels: 1e9
+    });
+  
+  // convert area to square km
+  var SpArrBuild_area_sqkm = SpArrBuild_area
+    .getNumber("NDFI")
+    .divide(10000)
+    .round()
+    .divide(100);
+
+  var settled_flooded = urban_flooded.mask().add(DenseBuild_flooded.mask()).gt(0)
+  settled_flooded = settled_flooded.updateMask(settled_flooded.eq(1))
+  
+  settled_flooded = settled_flooded.mask().add(OpArrBuild_flooded.mask()).gt(0)
+  settled_flooded = settled_flooded.updateMask(settled_flooded.eq(1))
+  
+  settled_flooded = settled_flooded.mask().add(SpArrBuild_flooded.mask()).gt(0)
+  settled_flooded = settled_flooded.updateMask(settled_flooded.eq(1))
+  
+  var lclu_Crop_settled = cultivated_flooded.mask().clip(bounds)
+    .add(settled_flooded.mask().remap([0,1],[0,5]))
+    .rename('lclu_Crop_settled')
+  lclu_Crop_settled = lclu_Crop_settled.remap([0,1,3,5,6,8,9],[0,1,2,3,4,5,6])
+  lclu_Crop_settled = lclu_Crop_settled.updateMask(lclu_Crop_settled.gt(0));
+  
+  if (app.checkbox_5.LCLU_affected.getValue() === true) {
+    Map.addLayer(lclu_Crop_settled,{min:0,max:4,palette:['dadada','0400ff', 'ff7704', 'fbff00']},'Flooded Cropland & Settled', 0)
+  }
+  
+  // Display the results on panels --------------------------------------------------------------------------------
+  // set position of panel where the results will be displayed 
+  var results = ui.Panel({
+    style: {
+      position: 'bottom-right',
+      padding: '1px 15px',
+      width: '350px'
+    }
+  });
+  
+  //Prepare the visualtization parameters of the labels 
+  var textVis_firstline = {
+    'margin':'0px 8px 2px 0px',
+    'color':'0310B4',
+    'fontSize':'16px',
+    'fontWeight':'bold'
+    };
+  var textVis = {
+    'margin':'5px 8px 2px 0px',
+    'color':'5DADE2',
+    'fontWeight':'bold'
+    };
+  var numberVIS = {
+    'margin':'0px 0px 2px 0px', 
+    'color':'FF5733',
+    'fontWeight':'bold'
+    };
+  var statiscticsVIS = {
+    'margin':'0px 0px 1px 0px', 
+    'color':'0310B4',
+    'fontWeight':'bold'
+    };
+  var subTextVis = {
+    'margin':'0px 5px 2px 0px',
+    'fontSize':'12px',
+    'color':'grey'
+    };
+  
+  var titleTextVis = {
+    'margin':'0px 0px 15px 0px',
+    'fontSize': '20px', 
+    'font-weight':'', 
+    'color': '088F8F'
+    };
+
+  // Extract date from meta data
+  function dates(imgcol){
+    var range = imgcol.reduceColumns(ee.Reducer.minMax(), ["system:time_start"]);
+    var printed = ee.String('Earliest ')
+      .cat(ee.Date(range.get('min')).format('YYYY-MM-dd'))
+      .cat(', latest ')
+      .cat(ee.Date(range.get('max')).format('YYYY-MM-dd'));
+    return printed;
+  }
+
+  // User defined threshold information for flood extent estimation
+  var text1_1 = ui.Label('Extracted Flood Information',textVis_firstline);
+  var number1_2 = ui.Label('The kf value of '+ params[4] +' for NDFI and '+ params[5] + ' for DII'+' considered for calculating thresholds and extracting flood. The earliest and latest dates of data availability are:', subTextVis); 
+  
+  // Sentinel-1 and Sentinel-2 Satellite Data 
+  var text2_2 = ui.Label('processing...',subTextVis);
+  dates(after).evaluate(function(val){text2_2.setValue('Senintel-1 imagery: '+val)});
+  var text2_a = ui.Label('Sentinel-2 Satellite Data:',textVis);
+  var text2_2_a = ui.Label('processing...',subTextVis);
+  dates(sentinel2_after).evaluate(function(val){text2_2_a.setValue('Senintel-2 imagery: '+val)});
+  
+  var text_histogram = ui.Label('SAR Indices Image Histograms:',textVis); 
+  
+  var text2_2_b = ui.Label('Flooded Areas (square km):',textVis); 
+  var text_data_LCLU = ui.Label('* The resources for "Flooded Areas" information is '+ lclu_data +'. The user can change this dataset via the listbox in "II. Change LCLU dataset" section of the Input Panel.', subTextVis); 
+
+  // Estimated flood extent
+  var number2 = ui.Label('processing...',numberVIS); 
+  flooded_area_sqkm.evaluate(function(val){number2.setValue('Total flood extent: ' +val)}),numberVIS;
+  
+  var number3 = ui.Label('processing...',numberVIS); 
+  crop_area_sqkm.evaluate(function(val){number3.setValue('Cropland flooded: ' +val)}),numberVIS;
+  
+  var number4 = ui.Label('processing...',numberVIS); 
+  urban_area_sqkm.evaluate(function(val){number4.setValue('Urban flooded: ' +val)}),numberVIS;
+  
+  var text2_2_d = ui.Label('Vulnerable Area Affected (square km):',textVis); 
+  
+  var text_data_urbanlands = ui.Label('* The resources for "Vulnerable Area Affected" information is global map of Local Climate Zones (LCZs) at 100m pixel size for characterizing urban landscapes.', subTextVis); 
+  
+  var number6 = ui.Label('processing...',numberVIS); 
+  Industry_area_sqkm.evaluate(function(val){number6.setValue('Heavey Industry: ' +val)}),numberVIS;
+  
+  var number7 = ui.Label('processing...',numberVIS); 
+  DenseBuild_area_sqkm.evaluate(function(val){number7.setValue('Dense Arraignment Building: ' +val)}),numberVIS;
+  
+  var number8 = ui.Label('processing...',numberVIS); 
+  OpArrBuild_area_sqkm.evaluate(function(val){number8.setValue('Open Arraignment Building: ' +val)}),numberVIS;
+    
+  var number9 = ui.Label('processing...',numberVIS); 
+  SpArrBuild_area_sqkm.evaluate(function(val){number9.setValue('Sparse Arraignment Building: ' +val)}),numberVIS;
+  
+  var text2_2_c = ui.Label('Number of Population Threatened:',textVis);
+  
+  var text_data_population = ui.Label('* The resources for "Number of Population Threatened" information is WorldPop Global Project Population Data at 100m pixel size for estimating human population distributions.', subTextVis); 
+
+  var text_datasets = ui.Label('Used Datasets:', {fontSize: '13px', margin: '0px 0px 2px 0px', fontWeight:'bold', color:'gray'});
+  
+  var number5 = ui.Label('processing...',numberVIS); 
+  people_affected_number.evaluate(function(val){number5.setValue(val+' person(s)')}),numberVIS;
+  
+  // Disclaimer
+  var text_disclaimer = ui.Label('***Disclaimer: This product has been automatically derived. Subsequently, expert validation is required to assess the viability of the final product for use in decision-making and action planning by responsible parties.***',subTextVis)
+
+  // Add the labels to the panel 
+  results.add(ui.Panel([
+    ui.Label({value: 'Result Panel', style: {fontWeight: '700', fontSize: '16px', color:'B3B5CB' , margin: '1px 1px 1px 100px'}}),
+    text1_1,
+    number1_2,
+    text2_2,
+    text2_2_a,
+    text2_2_b,
+    number2,
+    ]));
+    
+    if (app.checkbox_6.getStrategicInfo.getValue() === true) {
+      results.add(ui.Panel([
+        number3,
+        number4,
+        text2_2_d,
+        number6,
+        number7,
+        number8,
+        number9,
+        text2_2_c,
+        number5,
+        ]));
+    }
+    
+    if (app.checkbox_1.calibration.getValue() === false) {
+      if (app.checkbox_6.getStrategicInfo.getValue() === true) {
+        results.add(ui.Panel([
+          text_disclaimer,
+          text_datasets,
+          text_data_LCLU,
+          text_data_urbanlands,
+          text_data_population,
+        ]));
+      }
+      else{
+        results.add(ui.Panel([
+          text_disclaimer,
+        ]));
+      }
+    }
+
+  // Add the panel to the map 
+  app.rootResultPanels.panel.clear();
+  app.rootResultPanels.panel.add(results)//.add(controlPanel);
+  ui.root.remove(app.rootResultPanels.panel);
+  ui.root.insert(1, app.rootResultPanels.panel)
+  
+  //----------------------------- Display legend on the map --------------------------//
+  // https://mygeoblog.com/2016/12/09/add-a-legend-to-to-your-gee-map/
+  // set position of panel
+  var legend = ui.Panel({
+    style: {
+      position: 'bottom-right',
+      padding: '8px 15px',
+    }
+  });
+   
+  // Create legend title
+  var legendTitle = ui.Label('Legend',titleTextVis);
+   
+  // Creates and styles
+  var makeRow = function(color, name) {
+   
+        // Create the label that is actually the colored box.
+        var colorBox = ui.Label({
+          style: {
+            backgroundColor: color,
+            // Use padding to give the box height and width.
+            padding: '6px',
+            margin: '0 0 4px 0'
+          }
+        });
+   
+        // Create the label filled with the description text.
+        var description = ui.Label({
+          value: name,
+          style: {margin: '0 0 4px 6px'}
+        });
+   
+        // return the panel
+        return ui.Panel({
+          widgets: [colorBox, description],
+          layout: ui.Panel.Layout.Flow('horizontal')
+        });
+  };
+   
+  //  Palette with the colors
+  var palette =['#d6aa06', '#19b5ff', '#e4156b', '56ff6b', 'f6adff'];
+   
+  // name of the legend
+  var names = ['NDFI flood', 'DII flood', 'MNDWI flood', 'NDFI&DII flood', "Open Waters"];
+  
+  
+  
+  var palette =['56ff6b', 'f6adff', '#e4156b', '#d6aa06', '#19b5ff'];
+   
+  // name of the legend
+  var names = ['Merged NDFI&DII flood', "Open Waters", 'MNDWI flood', 'NDFI flood', 'DII flood'];
+  
+  if (app.checkbox_3.displayNDFIandDIIflood.getValue() === true) {
+    // Add color and and names
+    for (var i = 0; i < 5; i++) {
+      legend.add(makeRow(palette[i], names[i]));
+    }
+  } else {
+      for (var i = 0; i < 3; i++) {
+        legend.add(makeRow(palette[i], names[i]));
+      }
+  }  
+  
+  // Create second legend title to display exposed population density
+  var legendTitle2 = ui.Label({
+  value: 'Exposed population density',
+  style: {
+    fontWeight: 'bold',
+    fontSize: '15px',
+    margin: '10px 0 0 0',
+    padding: '0'
+  }
+  });
+  
+  //----------------------------- Display legend on the map --------------------------//
+  // set position of panel
+  var legend_lclu = ui.Panel({
+    style: {
+      position: 'bottom-right',
+      padding: '8px 15px',
+    }
+  });
+   
+  // Create legend title
+  //  Palette with the colors
+  var palette =['#0400ff', '#ff7704', '#fbff00'];
+   
+  // name of the legend
+  var names = ['Only Cropland Area', 'Only Setteled Area', 'Mixed Cropland & Setteled'];
+   
+  // Add color and and names
+  for (var i = 0; i < 3; i++) {
+    legend_lclu.add(makeRow(palette[i], names[i]));
+    }  
+  if (app.checkbox_5.LCLU_affected.getValue() === true) {
+    Map.add(legend_lclu);
+  }
+  Map.add(legend);
+  return combined_ndfi_dii
+}
+
+// ***** Calibrating the SAR indices threshold (NDFI and DII) based on available optical flood map ***** //
+function calibration(aoi){
+  if (app.checkbox_1.calibration.getValue() === true) {
+    
+    var startDay = app.startDateRange.startBoxDay.getValue()
+    var startMonth = app.startDateRange.startBoxMonth.getValue()
+    var startYear = app.startDateRange.startBoxYear.getValue()
+        
+    var endDay = app.endDateRange.endBoxDay.getValue()
+    var endMonth = app.endDateRange.endBoxMonth.getValue()
+    var endYear = app.endDateRange.endBoxYear.getValue()
+    
+    var lcluSelected = app.lcluSelect.lclu_info.getValue();
+    
+    var dateStart = ee.Number.parse(startDay).getInfo()
+    var monthStart = ee.Number.parse(startMonth).getInfo()
+    var yearStart = ee.Number.parse(startYear).getInfo()
+    
+    var dateEnd = ee.Number.parse(endDay).getInfo()
+    var monthEnd = ee.Number.parse(endMonth).getInfo()
+    var yearEnd = ee.Number.parse(endYear).getInfo()
+    
+    var RefDateStart = 01
+    var RefStartDay = app.refStartDateRange.refStartBoxDay.getValue()
+    if (RefStartDay != undefined) {
+      if (RefStartDay != "") {
+        RefDateStart = ee.Number.parse(RefStartDay).getInfo()
+      }
+    }
+    
+    var RefMonthStart = 06
+    var RefStartMonth = app.refStartDateRange.refStartBoxMonth.getValue()
+    if (RefStartMonth != undefined) {
+      if (RefStartMonth != "") {
+        RefMonthStart = ee.Number.parse(RefStartMonth).getInfo()
+      }
+    }
+    
+    var RefYearStart = 2017
+    var RefStartYear = app.refStartDateRange.refStartBoxYear.getValue()
+    if (RefStartYear != undefined) {
+      if (RefStartYear != "") {
+        RefYearStart = ee.Number.parse(RefStartYear).getInfo()
+      }
+    }
+
+    var RefDateEnd = 15
+    var RefEndDay = app.refEndDateRange.refEndBoxDay.getValue()
+    if (RefEndDay != undefined) {
+      if (RefEndDay != "") {
+        RefDateEnd = ee.Number.parse(RefEndDay).getInfo()
+      }
+    }
+    
+    var RefMonthEnd = 06
+    var RefEndMonth = app.refEndDateRange.refEndBoxMonth.getValue()
+    if (RefEndMonth != undefined) {
+      if (RefEndMonth != "") {
+        RefMonthEnd = ee.Number.parse(RefEndMonth).getInfo()
+      }
+    }
+    
+    var RefYearEnd = 2017
+    var RefEndYear = app.refEndDateRange.refEndBoxYear.getValue()
+    if (RefEndYear != undefined) {
+      if (RefEndYear != "") {
+        RefYearEnd = ee.Number.parse(RefEndYear).getInfo()
+      }
+    }
+    
+    var userDefinedNDFIThre = 1.5
+    var userThreNDFI = app.threValue.threBoxNDFI.getValue()
+    if (userThreNDFI != undefined) {
+      if (userThreNDFI != "") {
+        userDefinedNDFIThre = ee.Number.parse(userThreNDFI).getInfo()
+      }
+    }
+
+    var userDefinedDIIThre = 1.5
+    var userThreDII = app.threValue.threBoxDII.getValue()
+    if (userThreDII != undefined) {
+      if (userThreDII != "") {
+        userDefinedDIIThre = ee.Number.parse(userThreDII).getInfo()
+      }
+    }
+
+    var userDefinedMNDWIThre = 0.4
+    var userThreMNDWI = app.threValue.threBoxMNDWI.getValue()
+    if (userThreMNDWI != undefined) {
+      if (userThreMNDWI != "") {
+        userDefinedMNDWIThre = ee.Number.parse(userThreMNDWI).getInfo()
+      }
+    }
+
+    // Date set up
+    var start = yearStart + '-'+ monthStart + '-'+ dateStart
+    var end = yearEnd + '-' + monthEnd + '-'+ dateEnd
+    
+    /// *** Referenced Date set up from the the user panel interface information *** ///
+    var refStart = RefYearStart + '-'+ RefMonthStart + '-'+ RefDateStart
+    var refEnd = RefYearEnd + '-' + RefMonthEnd + '-'+ RefDateEnd
+    
+    // Parameters
+    var index_select = 'SAR' // 'NDFI', 'RI', or 'DII'
+    var mndwi_threshold = userDefinedMNDWIThre // 0.4 is the default
+    var k_min = 0.0
+    var k_max = 2.0
+    var n_intervals = 10 // Limit to 10 intervals for faster processing
+    var min_water = 4 // months of water presence; 4 is the default
+    var max_slope = 5 // in degrees; 5 is the default
+   
+    var params = [refStart, refEnd, start, end]
+
+    var optParams = [start, end]
+
+    // Visually inspect optical imagery - there will be better results with minimal clouds
+    var bounds = aoi
+    
+    // Preprocessing; interval generation and layer masks
+    var k_interval = (k_max-k_min)/n_intervals
+    var intervals = ee.List.sequence(k_min, k_max, k_interval)
+    var water_mask = ee.Image('JRC/GSW1_0/GlobalSurfaceWater').select('seasonality').gte(min_water)
+    water_mask = ee.Image(0).where(water_mask.eq(1),1)
+    var slope_mask = ee.Terrain.slope(ee.Image("NASA/NASADEM_HGT/001").select('elevation')).lt(max_slope)
+    print('k interval tests', intervals)
+    
+    // Optical image preprocessing; this code is built for Sentinel-2 data, but Landsat can be used instead with minimal modifications
+    var s2_flood = ee.ImageCollection("COPERNICUS/S2")
+      .filterBounds(bounds)
+      .filterDate(optParams[0], optParams[1])
+      .mosaic()
+      .clip(bounds)
+    
+    // Cloud masking
+    var qa = s2_flood.select('QA60')
+    var clouds_1 = qa.bitwiseAnd(Math.pow(2,10)).neq(0)
+    var clouds_2 = qa.bitwiseAnd(Math.pow(2,11)).neq(0)
+    var clouds_masked = s2_flood.updateMask(clouds_1.eq(0).and(clouds_2.eq(0)))
+    
+    // MNDWI calculation and flood delineation
+    var mndwi = clouds_masked.normalizedDifference(['B3','B11']).rename('MNDWI')
+    var mndwi_flood = mndwi.gt(mndwi_threshold)
+    mndwi_flood = mndwi_flood.updateMask(mndwi_flood.eq(1))
+      .updateMask(water_mask.eq(0))
+      .updateMask(slope_mask.eq(1))
+    var connections = mndwi_flood.connectedPixelCount().gte(25)
+    mndwi_flood = mndwi_flood.updateMask(connections.eq(1))
+    
+    // SAR data preprocessing
+    var collection = ee.ImageCollection('COPERNICUS/S1_GRD')
+      .filter(ee.Filter.eq('instrumentMode', 'IW'))
+      .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+      .filter(ee.Filter.eq('orbitProperties_pass', 'ASCENDING')) 
+      .filter(ee.Filter.eq('resolution_meters', 10))
+      .filterBounds(bounds)
+      .select('VH')
+    
+    var before = collection.filterDate(params[0], params[1])
+    var after = collection.filterDate(params[2], params[3])
+    
+    var mean_before = before.mean().clip(bounds)
+    var min_after = after.min().clip(bounds)
+    var max_after = after.max().clip(bounds)
+    var mean_after = after.mean().clip(bounds)
+    
+    // SAR NDFI index calculation and smoothing20
+    var index_ndfi, threshold_ndfi, index_parse_ndfi
+    index_ndfi = mean_before.abs().subtract(min_after.abs())
+        .divide(mean_before.abs().add(min_after.abs()))
+    
+    var index_smooth_ndfi = index_ndfi.focal_mean({radius: 50, kernelType: 'circle', units: 'meters'})
+    
+    // NDFI Index normalization
+    var index_min_ndfi = ee.Number(index_smooth_ndfi.reduceRegion({
+      reducer: ee.Reducer.min(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get('VH'))
+    
+    var index_max_ndfi = ee.Number(index_smooth_ndfi.reduceRegion({
+      reducer: ee.Reducer.max(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get('VH'))
+    
+    var index_norm_ndfi = index_smooth_ndfi.unitScale(index_min_ndfi, index_max_ndfi).rename("SAR")
+    
+    // NDFI Index thresholding
+    var index_mean_ndfi = ee.Number(index_norm_ndfi.reduceRegion({
+      reducer: ee.Reducer.mean(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get("SAR"))
+    
+    var index_stdev_ndfi = ee.Number(index_norm_ndfi.reduceRegion({
+      reducer: ee.Reducer.stdDev(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get("SAR"))
+    
+    // DII SAR index calculation and smoothing
+    var index_dii, threshold_dii, index_parse_dii
+    index_dii = min_after.abs().subtract(mean_before.abs())
+    var index_smooth_dii = index_dii.focal_mean({radius: 50, kernelType: 'circle', units: 'meters'})
+    
+    // DII Index normalization
+    var index_min_dii = ee.Number(index_smooth_dii.reduceRegion({
+      reducer: ee.Reducer.min(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get('VH'))
+    
+    var index_max_dii = ee.Number(index_smooth_dii.reduceRegion({
+      reducer: ee.Reducer.max(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get('VH'))
+    
+    var index_norm_dii = index_smooth_dii.unitScale(index_min_dii, index_max_dii).rename("SAR")
+  
+    // DII Index thresholding
+    var index_mean_dii = ee.Number(index_norm_dii.reduceRegion({
+      reducer: ee.Reducer.mean(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get("SAR"))
+    
+    var index_stdev_dii = ee.Number(index_norm_dii.reduceRegion({
+      reducer: ee.Reducer.stdDev(),
+      geometry: bounds,
+      scale: 10,
+      maxPixels: 1e13
+    }).get("SAR"))
+  
+    // *** Function to test all specified intervals for calculating optimum NDFI threshold *** //
+    function testThreshold_ndfi (i) {
+      
+      // Calculating selected index
+      threshold_ndfi = index_mean_ndfi.subtract(ee.Number(i).multiply(index_stdev_ndfi))
+      index_parse_ndfi = index_norm_ndfi.lt(threshold_ndfi)
+    
+      // MNDWI and SAR index comparison
+      var index_masking = index_parse_ndfi
+        .updateMask(index_parse_ndfi.eq(1))
+        .updateMask(water_mask.eq(0))
+        .updateMask(slope_mask.eq(1))
+      
+      var connections = index_masking.connectedPixelCount().gte(25)
+      index_masking = index_masking
+        .updateMask(connections.eq(1))
+      
+      var intersect = mndwi_flood.mask()
+        .add(index_masking.mask().remap([0,1],[0,3]))
+        .updateMask(clouds_1.eq(0).and(clouds_2.eq(0)))
+        .rename('intersect')
+        .remap([0,1,3,4],[0,1,2,3])
+
+      var filter = intersect.neq(0)
+      intersect = intersect.updateMask(filter).int()
+      
+      // Percent agreement based on area calculations; code courtesy of Ujaval Gandhi of SpatialThoughts - https://spatialthoughts.com/2020/06/19/calculating-area-gee/
+      var areaImage = ee.Image.pixelArea().addBands(intersect)
+      var areas = areaImage.reduceRegion({
+        reducer: ee.Reducer.sum().group({
+          groupField: 1,
+          groupName: 'class',
+        }),
+        geometry: bounds,
+        scale: 10,
+        maxPixels: 1e13
+      })
+       
+      var classAreas = ee.List(areas.get('groups'))
+      var classAreaLists = classAreas.map(function(item) {
+        var areaDict = ee.Dictionary(item)
+        var classNumber = ee.Number(areaDict.get('class')).format()
+        var area = areaDict.get('sum')
+        return ee.List([classNumber, area])
+      })
+       
+      var result = ee.Dictionary(classAreaLists.flatten())
+
+      var total_agreement = ee.Number(result.get('3'))
+        .divide(ee.Number(result.get('3')).add(ee.Number(result.get('2'))).add(ee.Number(result.get('1'))))
+        .multiply(100)
+        
+      var agreement = ee.Number(result.get('3'))
+        .divide(ee.Number(result.get('3')).add(ee.Number(result.get('1'))))
+        .multiply(100)
+      
+      return ee.Image(1).set('k_ndfi', i).set('percent_total_agreement_ndfi', total_agreement)
+        .set('percent_agreement_ndfi', agreement)
+    }
+    
+    // Print results to console
+    var allTests_ndfi = ee.ImageCollection(intervals.map(testThreshold_ndfi))
+    print(allTests_ndfi,"allTests_ndfi")
+
+    var max_ndfi = allTests_ndfi.sort('percent_total_agreement_ndfi', false).first()
+    
+    var kVal_ndfi = max_ndfi.get('k_ndfi')
+    kVal_ndfi = ee.Number(10).multiply(kVal_ndfi).round().divide(10)
+    
+    var TolAgreePerc_ndfi = max_ndfi.get('percent_total_agreement_ndfi')
+    TolAgreePerc_ndfi = ee.Number(TolAgreePerc_ndfi).round()
+    
+    var agreePerc_ndfi = max_ndfi.get('percent_agreement_ndfi')
+    
+    agreePerc_ndfi = ee.Number(agreePerc_ndfi).round()
+    
+    print('Optimal NDFI k', kVal_ndfi, 'Maximum % Total agreement NDFI ', TolAgreePerc_ndfi, 'Maximum % agreement NDFI', agreePerc_ndfi)
+    
+    // Function to test all specified intervals for calculating optimum DII threshold
+    function testThreshold_dii (i) {
+      
+      // Calculating selected index
+      threshold_dii = index_mean_dii.add(ee.Number(i).multiply(index_stdev_dii))
+      index_parse_dii = index_norm_dii.gt(threshold_dii)
+      
+      // MNDWI and SAR index comparison
+      var index_masking = index_parse_dii
+        .updateMask(index_parse_dii.eq(1))
+        .updateMask(water_mask.eq(0))
+        .updateMask(slope_mask.eq(1))
+      
+      var connections = index_masking.connectedPixelCount().gte(25)
+      index_masking = index_masking
+        .updateMask(connections.eq(1))
+      
+      var intersect = mndwi_flood.mask()
+        .add(index_masking.mask().remap([0,1],[0,3]))
+        .updateMask(clouds_1.eq(0).and(clouds_2.eq(0)))
+        .rename('intersect')
+        .remap([0,1,3,4],[0,1,2,3])
+        // 0 - neither
+        // 1 - mndwi
+        // 2 - index
+        // 3 - both
+      
+      var filter = intersect.neq(0)
+      intersect = intersect.updateMask(filter).int()
+      
+      // Percent agreement based on area calculations; code courtesy of Ujaval Gandhi of SpatialThoughts - https://spatialthoughts.com/2020/06/19/calculating-area-gee/
+      var areaImage = ee.Image.pixelArea().addBands(intersect)
+      var areas = areaImage.reduceRegion({
+        reducer: ee.Reducer.sum().group({
+          groupField: 1,
+          groupName: 'class',
+        }),
+        geometry: bounds,
+        scale: 10,
+        maxPixels: 1e13
+      })
+       
+      var classAreas = ee.List(areas.get('groups'))
+      var classAreaLists = classAreas.map(function(item) {
+        var areaDict = ee.Dictionary(item)
+        var classNumber = ee.Number(areaDict.get('class')).format()
+        var area = areaDict.get('sum')
+        return ee.List([classNumber, area])
+      })
+       
+      var result = ee.Dictionary(classAreaLists.flatten())
+      
+      var total_agreement = ee.Number(result.get('3'))
+        .divide(ee.Number(result.get('3')).add(ee.Number(result.get('2'))).add(ee.Number(result.get('1'))))
+        .multiply(100)
+        
+      var agreement = ee.Number(result.get('3'))
+        .divide(ee.Number(result.get('3')).add(ee.Number(result.get('1'))))
+        .multiply(100)
+      
+      return ee.Image(1).set('k_dii', i).set('percent_total_agreement_dii', total_agreement)
+        .set('percent_agreement_dii', agreement)
+    }
+    
+    // Print results to console
+    var allTests_dii = ee.ImageCollection(intervals.map(testThreshold_dii))
+    var max_dii = allTests_dii.sort('percent_total_agreement_dii', false).first()
+    
+    var kVal_dii = max_dii.get('k_dii')
+    kVal_dii = ee.Number(10).multiply(kVal_dii).round().divide(10)
+    
+    var TotalagreePerc_dii = max_dii.get('percent_total_agreement_dii')
+    TotalagreePerc_dii = ee.Number(TotalagreePerc_dii).round()
+    
+    var agreePerc_dii = max_dii.get('percent_agreement_dii')
+    agreePerc_dii = ee.Number(agreePerc_dii).round()
+    
+    print('Optimal DII k', kVal_dii, 'Maximum % Total agreement DII ', TotalagreePerc_dii, 'Maximum % agreement DII', agreePerc_dii)
+    
+    // Calculating selected index
+    threshold_ndfi = index_mean_ndfi.subtract(ee.Number(kVal_ndfi).multiply(index_stdev_ndfi))
+    index_parse_ndfi = index_norm_ndfi.lt(threshold_ndfi)
+    
+    // MNDWI and SAR index comparison
+    var index_masking_ndfi = index_parse_ndfi
+      .updateMask(index_parse_ndfi.eq(1))
+      .updateMask(water_mask.eq(0))
+      .updateMask(slope_mask.eq(1))
+    
+    var connections = index_masking_ndfi.connectedPixelCount().gte(25)
+    index_masking_ndfi = index_masking_ndfi
+      .updateMask(connections.eq(1))
+      
+    threshold_dii = index_mean_dii.add(ee.Number(kVal_dii).multiply(index_stdev_dii))
+    index_parse_dii = index_norm_dii.gt(threshold_dii)
+    
+    // MNDWI and SAR index comparison
+    var index_masking_dii = index_parse_dii
+      .updateMask(index_parse_dii.eq(1))
+      .updateMask(water_mask.eq(0))
+      .updateMask(slope_mask.eq(1))
+    
+    var connections = index_masking_dii.connectedPixelCount().gte(25)
+    index_masking_dii = index_masking_dii
+      .updateMask(connections.eq(1))
+    
+    var combined_Optimum_ndfi_dii = ee.ImageCollection([index_masking_ndfi, index_masking_dii]).mosaic()
+    
+    // Display the maps --------------------------------------------------------------------------------
+    print('Optimal NDFI k', kVal_ndfi, 'Maximum % agreement', TolAgreePerc_ndfi)
+    print('All NDFI results; expand feature properties below', allTests_ndfi)
+    
+    // Optical imagery added to map for inspection
+    if (app.checkbox_3.displayNDFIandDIIflood.getValue() === true) {
+      Map.addLayer(index_masking_ndfi, {palette: ['d6aa06']}, 'NDFI Flood (optimum threshold)', 0)
+      Map.addLayer(index_masking_dii, {palette: ['19b5ff']}, 'DII Flood (optimum threshold)', 0)
+    }
+    Map.addLayer(combined_Optimum_ndfi_dii, {palette: ['56ff6b']}, 'Combined NDFI & DII Flood (optimum threshold)', 1)
+    Map.centerObject(bounds).setOptions('HYBRID')
+    
+    /// *** Extract information from the calculated flood extent maps using optimum thresholds *** ///
+    // Calculate area of flood extent
+    var flood_pixel_area_optimum = combined_Optimum_ndfi_dii.multiply(ee.Image.pixelArea());
+    var flooded_area_optimum_sqm = flood_pixel_area_optimum.reduceRegion({
+      reducer: ee.Reducer.sum(),              
+      geometry: aoi,
+      scale: 10, 
+      //maxPixels: 1e9,
+      bestEffort: true
+      });
+    
+    // Convert flooded extent from m^2 to km^2
+    var flooded_area_optimum_sqkm = flooded_area_optimum_sqm
+      .getNumber("SAR")
+      .divide(10000)
+      .round()
+      .divide(100);
+      
+      
+      
+      
+      
+      /// *** Calculate affected Land cover and land use using using "NLCD 2019: USGS National Land Cover Database" ***///
+    if (lcluSelected == "USA") {
+      var dataset = ee.ImageCollection('USGS/NLCD_RELEASES/2019_REL/NLCD');
+      var nlcd2016 = dataset.filter(ee.Filter.eq('system:index', '2016')).first();
+      var LCLU = nlcd2016.select('landcover').clip(aoi);
+  
+      // Flooded cultivated lands
+      var cultivated_mask = LCLU.eq(82).or(LCLU.eq(81))
+      var cultivated = LCLU.updateMask(cultivated_mask)
+      
+      var lclu_data = 'the National Land Cover Database (NLCD) 30-m product land cover database for USA'
+    } 
+    if (lcluSelected == "Globe") {
+      var dataset = ee.ImageCollection("ESA/WorldCover/v200")
+      var worldCover = dataset.first();
+      var LCLU = worldCover.clip(aoi);
+  
+      // Flooded cultivated lands
+      var cultivated_mask = LCLU.eq(40)
+      var cultivated = LCLU.updateMask(cultivated_mask)
+  
+      var lclu_data = 'the European Space Agency (ESA) WorldCover 10m product global land cover map'
+    }
+      
+    // Calculate affected cropland using the resampled flood layer
+    var cultivated_flooded = combined_Optimum_ndfi_dii.updateMask(cultivated)
+
+    // get pixel area of affected cropland layer
+    var cultivated_pixelarea = cultivated_flooded.multiply(ee.Image.pixelArea());
+  
+    // sum pixels of affected cropland layer
+    var cultivated_area = cultivated_pixelarea.reduceRegion({
+      reducer: ee.Reducer.sum(), //sum all pixels with area information                
+      geometry: aoi,
+      scale: 30,
+      maxPixels: 1e9
+      });
+    
+    // convert area to square km
+    var crop_area_sqkm = cultivated_area
+      .getNumber("SAR")
+      .divide(10000)
+      .round()
+      .divide(100);
+
+    // Flooded Urban lands
+    if (lcluSelected == "USA") {
+      var urban_mask = LCLU.eq(21).or(LCLU.eq(22)).or(LCLU.eq(23)).or(LCLU.eq(24))
+    } if (lcluSelected == "Globe") {
+      var urban_mask = LCLU.eq(50)
+    }
+    
+    var urban = LCLU.updateMask(urban_mask)
+
+    // Calculate affected cropland using the resampled flood layer
+    var urban_flooded = combined_Optimum_ndfi_dii.updateMask(urban)
+
+    // get pixel area of affected cropland layer
+    var urban_pixelarea = urban_flooded.multiply(ee.Image.pixelArea());
+  
+    // sum pixels of affected cropland layer
+    var urban_area = urban_pixelarea.reduceRegion({
+      reducer: ee.Reducer.sum(), //sum all pixels with area information                
+      geometry: aoi,
+      scale: 30,
+      maxPixels: 1e9
+      });
+    
+    // convert area to square km
+    var urban_area_sqkm = urban_area
+      .getNumber("SAR")
+      .divide(1000)
+      .round()
+      .divide(1000);
+
+    var dataset = ee.ImageCollection('WorldPop/GP/100m/pop').filterDate('2017');
+    var count_population = dataset.select('population').mosaic().clip(aoi);
+    
+    // Create a raster showing exposed population only using the resampled flood layer
+    var people_affected = count_population
+      .updateMask(combined_Optimum_ndfi_dii)
+      .updateMask(count_population);
+    print("people_affected", people_affected)
+
+    //Sum pixel values of exposed population raster 
+    var people_affected_count = people_affected.reduceRegion({
+      reducer: ee.Reducer.sum(),
+      geometry: aoi,
+      scale: 100,
+      maxPixels:1e9 
+    });
+    
+    // get number of exposed people as integer
+    //var people_affected_number = people_affected_count.getNumber('basic_demographic_characteristics').round();
+    var people_affected_number = people_affected_count.getNumber('population').round();
+    print("people_affected_number2", people_affected_number)
+
+    // ***** Flooded Heavy Industry ***** //
+    var LCZones_dataset = ee.ImageCollection("RUB/RUBCLIM/LCZ/global_lcz_map/latest")
+    var LCZones = LCZones_dataset.select("LCZ_Filter").first().clip(aoi);
+
+    var Industry_mask = LCZones.eq(10)
+    var Industry = LCZones.updateMask(Industry_mask)
+
+    // Calculate affected cropland using the resampled flood layer
+    var Industry_flooded = combined_Optimum_ndfi_dii.updateMask(Industry)
+
+    // get pixel area of affected cropland layer
+    var Industry_pixelarea = Industry_flooded.multiply(ee.Image.pixelArea());
+  
+    // sum pixels of affected cropland layer
+    var Industry_area = Industry_pixelarea.reduceRegion({
+      reducer: ee.Reducer.sum(), //sum all pixels with area information                
+      geometry: aoi,
+      scale: 100,
+      maxPixels: 1e9
+      });
+      
+    // convert area to square km
+    var Industry_area_sqkm = Industry_area
+      .getNumber("SAR")
+      .divide(10000)
+      .round()
+      .divide(100);
+
+    // ***** Dense Building affected ***** //
+    var DenseBuild_mask = LCZones.eq(1).or(LCZones.eq(2)).or(LCZones.eq(3)).or(LCZones.eq(7))
+    var DenseBuild = LCZones.updateMask(DenseBuild_mask)
+
+    // Calculate affected cropland using the resampled flood layer
+    var DenseBuild_flooded = combined_Optimum_ndfi_dii.updateMask(DenseBuild)
+
+    // get pixel area of affected cropland layer
+    var DenseBuild_pixelarea = DenseBuild_flooded.multiply(ee.Image.pixelArea());
+  
+    // sum pixels of affected cropland layer
+    var DenseBuild_area = DenseBuild_pixelarea.reduceRegion({
+      reducer: ee.Reducer.sum(), //sum all pixels with area information                
+      geometry: aoi,
+      scale: 100,
+      maxPixels: 1e9
+      });
+    
+    // convert area to square km
+    var DenseBuild_area_sqkm = DenseBuild_area
+      .getNumber("SAR")
+      .divide(10000)
+      .round()
+      .divide(100);
+
+    // ***** Open Arrangement Building affected ***** //
+    var OpArrBuild_mask = LCZones.eq(4).or(LCZones.eq(5)).or(LCZones.eq(6))
+    var OpArrBuild = LCZones.updateMask(OpArrBuild_mask)
+
+    // Calculate affected cropland using the resampled flood layer
+    var OpArrBuild_flooded = combined_Optimum_ndfi_dii.updateMask(OpArrBuild)
+
+    // get pixel area of affected cropland layer
+    var OpArrBuild_pixelarea = OpArrBuild_flooded.multiply(ee.Image.pixelArea());
+  
+    // sum pixels of affected cropland layer
+    var OpArrBuild_area = OpArrBuild_pixelarea.reduceRegion({
+      reducer: ee.Reducer.sum(), //sum all pixels with area information                
+      geometry: aoi,
+      scale: 100,
+      maxPixels: 1e9
+      });
+    
+    // convert area to square km
+    var OpArrBuild_area_sqkm = OpArrBuild_area
+      .getNumber("SAR")
+      .divide(10000)
+      .round()
+      .divide(100);
+
+    // ***** Sparse Arrangement Building affected ***** //
+    var SpArrBuild_mask = LCZones.eq(9)
+    var SpArrBuild = LCZones.updateMask(SpArrBuild_mask)
+
+    // Calculate affected cropland using the resampled flood layer
+    var SpArrBuild_flooded = combined_Optimum_ndfi_dii.updateMask(SpArrBuild)
+
+    // get pixel area of affected cropland layer
+    var SpArrBuild_pixelarea = SpArrBuild_flooded.multiply(ee.Image.pixelArea());
+  
+    // sum pixels of affected cropland layer
+    var SpArrBuild_area = SpArrBuild_pixelarea.reduceRegion({
+      reducer: ee.Reducer.sum(), //sum all pixels with area information                
+      geometry: aoi,
+      scale: 100,
+      maxPixels: 1e9
+      });
+    
+    // convert area to square km
+    var SpArrBuild_area_sqkm = SpArrBuild_area
+      .getNumber("SAR")
+      .divide(10000)
+      .round()
+      .divide(100);
+
+    var settled_flooded = urban_flooded.mask().add(DenseBuild_flooded.mask()).gt(0)
+    settled_flooded = settled_flooded.updateMask(settled_flooded.eq(1))
+    
+    settled_flooded = settled_flooded.mask().add(OpArrBuild_flooded.mask()).gt(0)
+    settled_flooded = settled_flooded.updateMask(settled_flooded.eq(1))
+    
+    settled_flooded = settled_flooded.mask().add(SpArrBuild_flooded.mask()).gt(0)
+    settled_flooded = settled_flooded.updateMask(settled_flooded.eq(1))
+    
+    var lclu_Crop_settled = cultivated_flooded.mask().clip(bounds)
+      .add(settled_flooded.mask().remap([0,1],[0,5]))
+      .rename('lclu_Crop_settled')
+    lclu_Crop_settled = lclu_Crop_settled.remap([0,1,3,5,6,8,9],[0,1,2,3,4,5,6])
+    lclu_Crop_settled = lclu_Crop_settled.updateMask(lclu_Crop_settled.gt(0));
+    
+    if (app.checkbox_5.LCLU_affected.getValue() === true) {
+      Map.addLayer(lclu_Crop_settled,{min:0,max:4,palette:['dadada','0400ff', 'ff7704', 'fbff00']},'Flooded Cropland & Settled (optimum threshold)', 0)    
+    }
+    
+    var optimal_thre = ui.Panel({
+    style: {
+      position: 'bottom-right',
+      padding: '1px 15px',
+      width: '350px'
+    }
+    });
+    var textVis_firstline = {
+      'margin':'0px 8px 2px 0px',
+      'color':'0310B4',
+      'fontSize':'13.5px',
+      'fontWeight':'bold'
+    };
+    var textVis = {
+      'margin':'5px 8px 2px 0px',
+      'color':'5DADE2',
+      'fontWeight':'bold'
+    };
+    var numberVIS = {
+      'margin':'0px 0px 3px 0px', 
+      'color':'FF5733',
+      'fontWeight':'bold'
+    };
+    var numberVIS_sub = {
+      'margin':'0px 0px 2px 0px', 
+      'color':'196F3D',
+      'fontWeight':'bold'
+    };
+    var subTextVis = {
+      'margin':'0px 0px 2px 0px',
+      'fontSize':'12px',
+      'color':'grey'
+    };
+    var titleTextVis = {
+      'margin':'0px 0px 15px 0px',
+      'fontSize': '20px', 
+      'font-weight':'', 
+      'color': '088F8F'//DC143Cdc143c'
+    };  
+    
+    // Calculated Optimal SAR Indices Threshold
+    var text8 = ui.Label('User activated "Calculate Optimum Thresholds".',textVis_firstline);
+    var text8_0 = ui.Label('The above information updated with the following optimum kf values.',{fontSize: '13px', margin: '0px 0px 2px 0px', fontWeight:'bold', color:'red'});
+    var text8_1 = ui.Label('The MNDWI threshold value of ' +userDefinedMNDWIThre+ ' is used to identify floods in optical images.', subTextVis); 
+
+    var number8 = ui.Label('processing...',numberVIS_sub);
+    kVal_ndfi.evaluate(function(val){number8.setValue('Optimal kf for NDFI: ' +val+' ')}),numberVIS_sub;
+    
+    var number8_2 = ui.Label('processing...',subTextVis);
+    agreePerc_ndfi.evaluate(function(val){number8_2.setValue('With '+val+ '% agreement with optical flood extent')});
+    
+    var number9 = ui.Label('processing...',numberVIS_sub);
+    kVal_dii.evaluate(function(val){number9.setValue('Optimal kf for DII:  ' +val+' ')}),numberVIS_sub;
+    
+    var number9_2 = ui.Label('processing...',subTextVis);
+    agreePerc_dii.evaluate(function(val){number9_2.setValue('With ' +val+ '% agreement with optical flood extent')});
+    
+    var text_threshold = ui.Label('The optimum threshold results are based on available optical imagery from which Modified Normalized Difference Water Index (MNDWI) is calculated. The user should verify if the optical imagery flood map is suitable for analysis (via layer exploration) as for example clouds may negatively impact the results.', {fontSize: '10.5px', margin: '3px 0px 2px 5px', color:'gray'});
+    
+    var text10 = ui.Label('Flooded Area (square km):',textVis);    
+    var number10 = ui.Label('processing...',numberVIS); 
+    flooded_area_optimum_sqkm.evaluate(function(val){number10.setValue('Total flood extent: ' +val)}),numberVIS;
+    
+    var number11 = ui.Label('processing...',numberVIS); 
+    crop_area_sqkm.evaluate(function(val){number11.setValue('Croplands flooded: ' +val)}),numberVIS;
+    
+    var number12 = ui.Label('processing...',numberVIS); 
+    urban_area_sqkm.evaluate(function(val){number12.setValue('Urban flooded: ' +val)}),numberVIS;
+    
+    var text11 = ui.Label('Number of Population Threatened:',textVis);
+    
+    var number13 = ui.Label('processing...',numberVIS); 
+    people_affected_number.evaluate(function(val){number13.setValue(val+' person(s)')}),numberVIS;
+    
+    var text12 = ui.Label('Vulnerable Area Affected (square km):',textVis); 
+  
+    var number14 = ui.Label('processing...',numberVIS); 
+    Industry_area_sqkm.evaluate(function(val){number14.setValue('Heavey Industry: ' +val)}),numberVIS;
+    
+    var number15 = ui.Label('processing...',numberVIS); 
+    DenseBuild_area_sqkm.evaluate(function(val){number15.setValue('Dense Arraignment Building: ' +val)}),numberVIS;
+    
+    var number16 = ui.Label('processing...',numberVIS); 
+    OpArrBuild_area_sqkm.evaluate(function(val){number16.setValue('Open Arraignment Building: ' +val)}),numberVIS;
+      
+    var number17 = ui.Label('processing...',numberVIS); 
+    SpArrBuild_area_sqkm.evaluate(function(val){number17.setValue('Sparse Arraignment Building: ' +val)}),numberVIS;
+    
+    var text_data_LCLU = ui.Label('* The resources for "Flooded Areas" information is '+ lclu_data +'. The user can change this dataset via the listbox in "II. Change LCLU dataset" section of the Input Panel.', subTextVis); 
+    var text_data_urbanlands = ui.Label('* The resources for "Vulnerable Area Affected" information is global map of Local Climate Zones (LCZs) at 100m pixel size for characterizing urban landscapes.', subTextVis); 
+    var text_data_population = ui.Label('* The resources for "Number of Population Threatened" information is WorldPop Global Project Population Data at 100m pixel size for estimating human population distributions.', subTextVis); 
+
+    var text_datasets = ui.Label('Used Datasets:', {fontSize: '13px', margin: '0px 0px 2px 0px', fontWeight:'bold', color:'gray'});
+    
+    var text_disclaimer  = ui.Label('***Disclaimer: This product has been automatically derived. Subsequently, expert validation is required to assess the viability of the final product for use in decision-making and action planning by responsible parties.***',subTextVis)
+    
+    optimal_thre.add(ui.Panel([
+      ui.Label({value: '*Updated Information*', style: {fontWeight: '700', fontSize: '16px', color:'B3B5CB' , margin: '1px 1px 1px 75px'}}),
+      text8,
+      text8_0,
+      text8_1,
+      number8,
+      number8_2,
+      number9,
+      number9_2,
+      text_threshold,
+      text10,
+      number10,
+   ]));
+   
+    if (app.checkbox_6.getStrategicInfo.getValue() === true) {
+      optimal_thre.add(ui.Panel([
+        number11,
+        number12,
+        text12,
+        number14,
+        number15,
+        number16,
+        number17,
+        text11,
+        number13,
+        text_disclaimer,
+        text_datasets,
+        text_data_LCLU,
+        text_data_urbanlands,
+        text_data_population,
+      ]));
+    }
+    else{
+      optimal_thre.add(ui.Panel([
+        text_disclaimer,
+      ]));
+    }
+
+    app.rootResultPanels.panel.add(optimal_thre)
+  }
+}
+
+// *** First panel to get input dates and user-defined threshold  *** //
+var symbol = {
+  rectangle: '⬛',
+  polygon: '🔺',
+};
+
+var app = {};
+
+  app.startDateRange = {
+    label: ui.Label(),
+    startBoxDay: ui.Textbox({placeholder: 'DD', style: {width: '40px', margin: '5px 1px 1px 1px'}}),
+    startBoxMonth: ui.Textbox({placeholder: 'MM', style: {width: '42px', margin: '5px 1px 1px 1px'}}),
+    startBoxYear: ui.Textbox({placeholder: 'YYYY', style: {width: '52px', margin: '5px 1px 1px 1px'}}),
+    fromtext: ui.Label({value: 'From:', style: {fontSize: '12px', margin: '10px 1px 1px 10px'}}),
+    dateformat: ui.Label({value: '', style: {fontSize: '11px', margin: '10px 1px 1px 3px', color: '757575'}})
+  }
+  
+  app.endDateRange = { 
+    label: ui.Label(),
+    endBoxDay: ui.Textbox({placeholder: 'DD', style: {width: '40px', margin: '5px 1px 1px 15px'}}),
+    endBoxMonth: ui.Textbox({placeholder: 'MM', style: {width: '42px', margin: '5px 1px 1px 1px'}}),
+    endBoxYear: ui.Textbox({placeholder: 'YYYY', style: {width: '52px', margin: '5px 1px 1px 1px'}}),
+    totext: ui.Label({value: 'To:', style: {fontSize: '12px', margin: '10px 1px 1px 10px'}}),
+    dateformat: ui.Label({value: '', style: {fontSize: '11px', margin: '10px 1px 1px 3px', color: '757575'}})
+  }
+  
+  app.refStartDateRange = {
+    label: ui.Label(),
+    refStartBoxDay: ui.Textbox({placeholder: '01', style: {width: '40px', margin: '5px 1px 1px 1px'}}),
+    refStartBoxMonth: ui.Textbox({placeholder: '06', style: {width: '42px', margin: '5px 1px 1px 1px'}}),
+    refStartBoxYear: ui.Textbox({placeholder: '2017', style: {width: '52px', margin: '5px 1px 1px 1px'}}),
+    fromtext: ui.Label({value: 'From:', style: {fontSize: '12px', margin: '10px 1px 1px 10px'}}),
+    dateformat: ui.Label({value: '', style: {fontSize: '11px', margin: '10px 1px 1px 3px', color: '757575'}})
+  }
+  
+  app.refEndDateRange = { 
+    label: ui.Label(),
+    refEndBoxDay: ui.Textbox({placeholder: '15', style: {width: '40px', margin: '5px 1px 1px 15px'}}),
+    refEndBoxMonth: ui.Textbox({placeholder: '06', style: {width: '42px', margin: '5px 1px 1px 1px'}}),
+    refEndBoxYear: ui.Textbox({placeholder: '2017', style: {width: '52px', margin: '5px 1px 1px 1px'}}),
+    totext: ui.Label({value: 'To:', style: {fontSize: '12px', margin: '10px 1px 1px 10px'}}),
+    dateformat: ui.Label({value: '', style: {fontSize: '11px', margin: '10px 1px 1px 3px', color: '757575'}})
+  }
+  
+  app.threValue = {
+    label: ui.Label(),
+    threBoxNDFI: ui.Textbox({placeholder: '1.5', style: {width: '50px', margin: '5px 1px 1px 1px'}}),
+    threBoxDII: ui.Textbox({placeholder: '1.5', style: {width: '50px', margin: '5px 1px 1px 1px'}}),
+    threBoxMNDWI: ui.Textbox({placeholder: '0.4', style: {width: '50px', margin: '5px 1px 1px 1px'}}),
+    NDFItext: ui.Label({value: 'NDFI:', style: {fontSize: '14px', margin: '8px 1px 1px 10px'}}),
+    DIItext: ui.Label({value: 'DII:', style: {fontSize: '14px', margin: '8px 1px 1px 10px'}}),
+    MNDWItext: ui.Label({value: 'MNDWI:', style: {fontSize: '14px', margin: '8px 1px 1px 10px'}})
+  }
+
+  app.checkbox_1 = {
+    calibration: ui.Checkbox({label: 'Calculate Optimum Thresholds', style: {fontSize: '12px', margin: '5px 1px 1px 10px'}, value: false})
+  };
+  
+  app.checkbox_2 = {
+    imagehistogram: ui.Checkbox({label: 'Display Histograms for NDFI and DII', style: {fontSize: '12px', margin: '5px 3px 1px 10px'}, value: false})
+  };
+  
+  app.checkbox_3 = {
+    displayNDFIandDIIflood: ui.Checkbox({label: 'Display NDFI and DII Flood Map Results', style: {fontSize: '12px', margin: '5px 3px 1px 10px'}, value: false})
+  };
+  
+  app.checkbox_4 = {
+    getDownloadLink: ui.Checkbox({label: 'Get Flood Map Download Link', style: {fontSize: '12px', margin: '5px 1px 1px 10px'}, value: false})
+  };
+  
+  var lcluList = {
+    Globe: [],  USA: [],
+  };
+  
+  app.lcluSelect = {
+    label: ui.Label(),
+    lclu_info: ui.Select({
+      items: Object.keys(lcluList),
+    })
+  };
+  
+  app.checkbox_5 = {
+    LCLU_affected: ui.Checkbox({label: 'Display Cropland & Urban Affected', style: {fontSize: '12px', margin: '5px 1px 1px 10px'}, value: false}),
+  };
+  
+  app.listbox_1 = {
+    LCLUSelection: app.lcluSelect.lclu_info
+  };
+  
+  app.checkbox_6 = {
+    getStrategicInfo: ui.Checkbox({label: 'Extract Strategic Information', style: {fontSize: '12px', margin: '5px 1px 1px 10px'}, value: false})
+  };
+  
+  app.checkbox_7 = {
+    displayNDFIandDIIimage: ui.Checkbox({label: 'Display NDFI and DII Images', style: {fontSize: '12px', margin: '5px 3px 1px 10px'}, value: false})
+  };
+  
+  var panel = ui.Panel({
+    layout: ui.Panel.Layout.flow('vertical'),
+    style: {
+      position: 'bottom-left',
+      width: '255px'
+    }
+  })
+  
+  var controlPanel = ui.Panel({
+  widgets: [
+    ui.Label({value: 'Input Panel', style: {fontWeight: '700', fontSize: '16px', color:'B3B5CB' , margin: '1px 1px 1px 75px'}}),
+    ui.Label({value: 'Fast Flood Monitoring Tool', style: {fontWeight: '700', fontSize: '17px', color:'0047AB' , margin: '1px 5px 1px 10px'}}),
+    
+    ui.Panel([
+        ui.Label({value: '1. Enter Target Flood Event Period:', 
+          style: {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '3px 3px 3px 10px'}}),
+        ui.Label({value: '(Required)',
+          style: {fontWeight: '300', fontSize: '10px', margin: '3px 0px 0px 0px', color: 'F80909'},
+          }),
+      ],
+      ui.Panel.Layout.Flow('horizontal'),
+      {fontWeight: '300', fontSize: '12px', margin: '0px 0px 0px 0px'}
+    ),
+    
+    ui.Label('For example, for the Hurricane Harvey flood event in Galveston Bay, the period:', {fontSize: '12px', margin: '1px 3px 3px 10px'}),
+    ui.Label('From "25-08-2017" To "10-09-2017" ', {fontSize: '12px', margin: '1px 3px 3px 10px'}),
+    ui.Label(' would cover the available Sentinel-1 and Sentinel-2 data. (Valid date: DD - MM - YYYY)', {fontSize: '12px', margin: '1px 3px 3px 10px'}),
+
+    ui.Panel([app.startDateRange.fromtext, app.startDateRange.startBoxDay, app.startDateRange.startBoxMonth, app.startDateRange.startBoxYear, app.startDateRange.dateformat], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Panel([app.endDateRange.totext, app.endDateRange.endBoxDay, app.endDateRange.endBoxMonth, app.endDateRange.endBoxYear, app.endDateRange.dateformat], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Panel([
+      ui.Label({value: '2. Advance Flood Map Features:', 
+            style: {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '3px 3px 3px 10px'}}),
+      ui.Label({value: '(Optional)',
+                  style: {fontWeight: '300', fontSize: '10px', margin: '3px 0px 0px 0px', color: 'F80909'},
+                  }),
+      ],
+      ui.Panel.Layout.Flow('horizontal'),
+      {fontWeight: '300', fontSize: '12px', margin: '0px 0px 0px 0px'}
+    ),
+    
+    ui.Label('Checking the box below activates the calculation of optimum SAR index threshold values using a multi-source (SAR and Optical satellite data) calibration approach.', {fontSize: '12px', margin: '3px 3px 3px 10px'}),
+    
+    ui.Panel([app.checkbox_1.calibration], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Label('Checking the box below extracts strategic information, such as the type of land use affected and the number of people threatened.', {fontSize: '12px', margin: '3px 3px 3px 10px'}),
+
+    ui.Panel([app.checkbox_6.getStrategicInfo], ui.Panel.Layout.Flow('horizontal')),
+
+    ui.Panel([
+        ui.Label({value: '3. Select a Drawing Mode:', 
+          style: {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '3px 3px 3px 10px'}}),
+        ui.Label({value: '(Required)',
+          style: {fontWeight: '300', fontSize: '10px', margin: '3px 0px 0px 0px', color: 'F80909'},
+          }),
+      ],
+      ui.Panel.Layout.Flow('horizontal'),
+      {fontWeight: '300', fontSize: '12px', margin: '0px 0px 0px 0px'}
+    ),
+    
+    ui.Label('Enter the date period above for the target flood event before drawing the boundary. The map will populate after the geometry is drawn.', {fontSize: '12px', margin: '3px 3px 3px 10px'}),
+    
+    ui.Button({
+      label: symbol.rectangle + ' Rectangle',
+      onClick: drawRectangle,
+      style: {stretch: 'horizontal'} //color: 'FA4616', width: '150px', 
+    }),
+    
+    ui.Button({
+      label: symbol.polygon + ' Polygon',
+      onClick: drawPolygon,
+      style: {stretch: 'horizontal'}
+    }),
+
+    ui.Label('The below boxes are provided for experts to have more flexibility to change the predefined parameters if required.', {fontWeight: '400', fontSize: '13px', color:'red', margin: '10px 3px 3px 10px'}),
+    
+    ui.Label('Redraw your boundary after any Input Panel change to view map updates.', {fontWeight: '500', fontSize: '14px', color:'red', margin: '1px 3px 3px 10px'}),
+
+    ui.Label('I. Display Additional Map and Graphics', {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '10px 3px 3px 10px'}),
+
+    ui.Panel([app.checkbox_3.displayNDFIandDIIflood], ui.Panel.Layout.Flow('horizontal')),
+    ui.Panel([app.checkbox_7.displayNDFIandDIIimage], ui.Panel.Layout.Flow('horizontal')),
+    ui.Panel([app.checkbox_2.imagehistogram], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Panel([app.checkbox_5.LCLU_affected], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Label('II. Change LCLU dataset', {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '10px 3px 3px 10px'}),
+
+    ui.Label('The app utilizes the European Space Agency (ESA) dataset for extracting land cover and land use information by default. If you are mapping floods for the USA, you can enhance accuracy by changing the selector list below to USA and using the United States Geological Survey (USGS) dataset.', {fontSize: '11px', margin: '1px 1px 1px 10px', color:'gray'}),    
+
+    ui.Panel([app.listbox_1.LCLUSelection], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Label('III. Adjust Kf Values For SAR Indices', {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '10px 3px 3px 10px'}),
+    ui.Label('Numbers between 0.0 to 2.0 (default: 1.5). This number serves as the Kf value in the thresholding equation for extracting floods using the Normalized Difference Flood Index (NDFI) and Difference Image Index (DII) from SAR images. For more information, please refer to the following resource:', {fontSize: '11px', margin: '1px 1px 1px 10px', color:'gray'}),
+    ui.Panel([
+          ui.Label({value: 'Refer to:', 
+            style: {fontSize: '12px', margin: '0px 5px 0px 0px'}}),
+          ui.Label({value: 'Hamidi et al., (2023)',
+            style: {fontWeight: '300', fontSize: '12px', margin: '1px 1px 1px 1px', color: '041764'},
+            targetUrl: 'https://doi.org/10.1109/TGRS.2023.3240097'}),
+        ],
+        ui.Panel.Layout.Flow('horizontal'),
+        {fontWeight: '300', fontSize: '12px', margin: '0px 0px 0px 10px'}
+      ),
+    ui.Panel([app.threValue.NDFItext, app.threValue.threBoxNDFI, app.threValue.DIItext, app.threValue.threBoxDII], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Panel([app.checkbox_4.getDownloadLink], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Label('IV. Adjust Threshold for MNDWI', {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '10px 3px 3px 10px'}),
+    ui.Label('Numbers between 0.0 to 0.5 (default: 0.4). This number serves as the threshold for extracting floods using the Modified Normalized Difference Water Index (MNDWI) form optical images. For more information, please refer to the following resource:', {fontSize: '11px', margin: '1px 1px 1px 10px', color:'gray'}),
+    ui.Panel([
+        ui.Label({value: 'Refer to:', 
+              style: {fontSize: '12px', margin: '0px 5px 0px 0px'}}),
+        ui.Label({value: 'Hamidi et al., (2023)',
+                    style: {fontWeight: '300', fontSize: '12px', margin: '1px 1px 1px 1px', color: '041764'},
+                    targetUrl: 'https://doi.org/10.1109/TGRS.2023.3240097'}),
+        ],
+        ui.Panel.Layout.Flow('horizontal'),
+        {fontWeight: '300', fontSize: '12px', margin: '0px 0px 0px 10px'}
+      ),
+                    
+    ui.Panel([app.threValue.MNDWItext, app.threValue.threBoxMNDWI], ui.Panel.Layout.Flow('horizontal')),
+    
+    ui.Label('V. Adjust Reference SAR Images Period', {fontWeight: '450', fontSize: '13px', color:'5DADE2', margin: '3px 3px 3px 10px'}),
+    ui.Label('We assigned the default reference period:', {fontSize: '11px', margin: '1px 3px 3px 10px', color:'gray'}),
+    ui.Label('From "01-06-2017" To "15-06-2017" ', {fontSize: '12px', margin: '1px 3px 3px 10px'}),
+    ui.Label('If the default reference period does not encompass appropriate reference images within the available Sentinel-1 data, please consider adjusting the time period.', {fontSize: '11px', margin: '1px 3px 3px 10px', color:'gray'}),
+
+    ui.Panel([app.refStartDateRange.fromtext, app.refStartDateRange.refStartBoxDay, app.refStartDateRange.refStartBoxMonth, app.refStartDateRange.refStartBoxYear, app.refStartDateRange.dateformat], ui.Panel.Layout.Flow('horizontal')),
+    ui.Panel([app.refEndDateRange.totext, app.refEndDateRange.refEndBoxDay, app.refEndDateRange.refEndBoxMonth, app.refEndDateRange.refEndBoxYear, app.refEndDateRange.dateformat], ui.Panel.Layout.Flow('horizontal')),
+    
+    
+    ui.Label('App created by Ebrahim Hamidi (University of Alabama) and reviewed by Brad G. Peter (University of Arkansas), funded by the National Science Foundation INFEWS Program and the U.S. Army Corps of Engineers. Also, partial support for development of this App is awarded through CUAHSI’s 2023 Hydroinformatics Innovation Fellowship (HIF).', {fontSize: '11px', color:'49B403'}),
+  ],
+  style: {position: 'bottom-left'},
+  layout: null,
+  });
+  
+  app.lcluSelect.lclu_info.setValue(app.lcluSelect.lclu_info.items().get(0));
+
+  app.rootPanels = {
+    panel: ui.Panel({layout: ui.Panel.Layout.flow('vertical'), style: {width: '275px'}}),
+  }
+  app.rootPanels.panel.add(panel).add(controlPanel);
+
+  ui.root.insert(0, app.rootPanels.panel)
+  
+  app.rootResultPanels = {
+    panel: ui.Panel({layout: ui.Panel.Layout.flow('vertical'), style: {position: 'middle-right', width: '350px'}}),
+  }
+  
+  var panelDownload = ui.Panel({
+    layout: ui.Panel.Layout.flow('vertical'),
+    style: {
+      position: 'top-right',
+      width: '175px'
+    }
+  })
+  
+  var dwldcontrolPanel = ui.Panel({
+  widgets: [
+    ui.Label({value: 'Download Maps', style: {fontSize: '12px', fontWeight:'bold', color:'black' , margin: '0px 0px 0px 0px'}}),
+      ],
+  style: {position: 'bottom-left'},
+  layout: null,
+  });
+  
+drawingTools.onDraw(ui.util.debounce(sarFloodMapper, 500));
+drawingTools.onEdit(ui.util.debounce(sarFloodMapper, 500));
+
+drawingTools.onDraw(ui.util.debounce(calibration, 500));
+drawingTools.onEdit(ui.util.debounce(calibration, 500));
