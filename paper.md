@@ -1,5 +1,5 @@
 ---
-title: 'FFMT: Fast Flood Monitoring Tool'
+title: 'Multi-Source and Multi-Temporal Google Earth Engine App for Emergency Flood Mapping'
 tags:
   - Java Script
   - flood mapping
