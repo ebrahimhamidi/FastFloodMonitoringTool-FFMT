@@ -1,5 +1,5 @@
 ---
-title: 'Multi-Source and Multi-Temporal Google Earth Engine App for Emergency Flood Mapping'
+title: 'A multi-source remote sensing-based geocommunication tool for global flood monitoring and management'
 tags:
   - Java Script
   - flood mapping
@@ -36,6 +36,9 @@ date: 13 February 2024
 bibliography: paper.bib
 
 ---
+# Abstract
+
+Global warming is expected to increase the frequency of extreme flooding, making rapid and accurate flood mapping crucial for effective risk assessment. Many governmental agencies and organizations are developing flood risk assessment tools; however, due to the lack of observational records, some rely on probabilistic generated data, uncalibrated simulations, or terrain-based methods, all of which are subject to various types of uncertainty. Although remote sensing provides valuable flood data with global coverage, single-source reliance is constrained by satellite revisit rates, resolution, weather conditions, and sensor limitations. To address these challenges, this study introduces a user-friendly application on the Google Earth Engine (GEE) platform that enables near-real-time global flood mapping using a multi-source remote sensing approach. By leveraging optical and SAR imagery, the App ensures improved water detection accuracy and supports all-weather and day/night monitoring. Our results show SAR and optical flood inundation maps agree up to 80 %. Beyond flood mapping, the tool leverages GEE datasets to extract multi-disciplinary information, such as population exposure and affected residential, urban, and cropland areas, to support timely decision-making. For example, during the Sylhet, Bangladesh flood, the tool identified over 300,000 people potentially affected and approximately 600 km2 of cropland inundated. This research presents one of the first global-scale, rapid, multi-source flood mapping tools tailored to both expert users and non-expert decision-makers. It offers a practical solution to current data limitations and supports more informed emergency response, planning, and climate resilience efforts to foster communication across scientific, policy, management, and operational communities.
 
 # Summary
 
@@ -67,13 +70,13 @@ inundation information and improves the current methods of flood mapping.
 # Statement of need
 
 Floods, common natural disasters worldwide, resulted in approximately $40 billion in losses between 2011 
-and 2015, as reported by the Financial Management of Flood Risk [@OECD:2016].
+and 2015, as reported by the Financial Management of Flood Risk.
 Science and technology advancements provide alternatives for managing natural disasters such as floods. 
 Satellite-based flood inundation mapping is crucial for emergency responders, aiding crisis managers in 
 monitoring and managing floods. It enhances situational awareness, identifying areas requiring immediate 
 action across large geographical areas, expediting relief response activities.
 Remote sensing is widely employed not only for flood inundation mapping but also for assessing flood impact, 
-offering a comprehensive review to address diverse stakeholder needs [@Sadiq:2023]. These stakeholders have specific 
+offering a comprehensive review to address diverse stakeholder needs. These stakeholders have specific 
 requirements aligned with particular objectives, serving various purposes.
 • Flood monitoring
 • Strategies for preventing and mitigating flood risks
@@ -91,13 +94,12 @@ monitoring. This App provides tools to facilitate flood monitoring tasks by defi
 boundary to observe the flood extent conditions in their area of interest. Through this App, our aim is to empower 
 decision-makers, first responders, scientists, and other stakeholders with clear, useful information, enabling them 
 to better understand, prepare for, and respond to treacherous flooding hazards. This information is crucial, 
-considering the populations, infrastructure facilities, urban area, and cropland at risk.
+considering the populations, infrastructure facilities, urban area, and cropland at risk [@Hamidi:2025].
 
 # Citations
 
-- `@author:2016`  ->  "OECD (2016)"
-- `[@Sadiq:2023]` -> "(Sadiq et al., 2023)"
 - `[@Hamidi:2023]` -> "(Hamidi et al., 2023)"
+- `[@Hamidi:2025]` -> "(Hamidi et al., 2025)"
 
 # Acknowledgements
 
@@ -106,6 +108,5 @@ funded by the National Science Foundation INFEWS Program and the U.S. Army Corps
 support for development of this App is awarded through CUAHSI’s 2023 Hydroinformatics Innovation Fellowship (HIF).
 
 # References
-- OECD, Financial Management of Flood Risk. OECD, 2016. doi: 10.1787/9789264257689-en.
-- R. Sadiq, M. Imran, and F. Ofli, “Remote Sensing for Flood Mapping and Monitoring,” in International Handbook of Disaster Research, A. Singh, Ed., Singapore: Springer Nature Singapore, 2023, pp. 679–697. doi: 10.1007/978-981-19-8388-7_178.
-- E. Hamidi, B. G. Peter, D. F. Munoz, H. Moftakhari, and H. Moradkhani, “Fast Flood Extent Monitoring with SAR Change Detection Using Google Earth Engine,” IEEE Trans. Geosci. Remote Sensing, pp. 1–1, 2023, doi: 10.1109/TGRS.2023.3240097.
+- E. Hamidi, B. G. Peter, D. F. Munoz, H. Moftakhari, and H. Moradkhani, “Fast Flood Extent Monitoring with SAR Change Detection Using Google Earth Engine”, IEEE Transactions on Geoscience and Remote Sensing, vol. 61, pp. 1-19, 2023, Art no. 4201419, doi: 10.1109/TGRS.2023.3240097.
+- E. Hamidi, B. G. Peter, H. Moftakhari, and H. Moradkhani, “A multi-source remote sensing-based geocommunication tool for global flood monitoring and management”, International Journal of Applied Earth Observation and Geoinformation, Volume 142, 2025, 104701, ISSN 1569-8432, https://doi.org/10.1016/j.jag.2025.104701.
